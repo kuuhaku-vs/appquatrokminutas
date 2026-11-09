@@ -9,7 +9,8 @@ function buildPrintHTML(m) {
   const declaracao = esc(m.declaracao || 'Declaro que as informações acima estão corretas, e que concordo com as disposições legais e regulamentares contidas no conhecimento.');
   return `<!doctype html><html><head><meta charset="utf-8"><style>
 @page{size:A4;margin:0}
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
+html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 body{margin:0;font-family:Cambria,"Times New Roman",serif;color:#000}
 .page{width:210mm;height:297mm;padding:8mm 8.5mm;overflow:hidden}
 .stamp{text-align:right;font-size:9pt;margin-bottom:3mm}
