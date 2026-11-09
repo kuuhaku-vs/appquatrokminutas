@@ -1,0 +1,8 @@
+# Dados locais e binários do programa do Windows (não vão para o GitHub)
+dados/
+node_modules/
+*.exe
+*.dll
+*.pak
+*.log
+sheets-fila.json

@@ -1,0 +1,23 @@
+const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('api', {
+  getConfig: () => ipcRenderer.invoke('config:get'),
+  setConfig: (c) => ipcRenderer.invoke('config:set', c),
+  escolherPlanilha: () => ipcRenderer.invoke('config:escolherPlanilha'),
+  proximoNumero: (digitos) => ipcRenderer.invoke('numero:proximo', digitos),
+  verificarDuplicatas: () => ipcRenderer.invoke('planilha:duplicatas'),
+  getHistorico: () => ipcRenderer.invoke('historico:get'),
+  excluirMinuta: (numero) => ipcRenderer.invoke('minuta:excluir', numero),
+  gerarPDF: (minuta, html) => ipcRenderer.invoke('minuta:pdf', { minuta, html }),
+  gerarCSV: (minuta) => ipcRenderer.invoke('minuta:csv', minuta),
+  imprimir: (html) => ipcRenderer.invoke('minuta:imprimir', html),
+  abrirDados: () => ipcRenderer.invoke('dados:abrir'),
+  abrirCSV: () => ipcRenderer.invoke('csv:abrir'),
+  abrirPDF: (p) => ipcRenderer.invoke('pdf:abrir', p),
+  dataPath: () => ipcRenderer.invoke('dados:path'),
+  diagnostico: () => ipcRenderer.invoke('diagnostico:get'),
+  sheetsStatus: () => ipcRenderer.invoke('sheets:status'),
+  sheetsTestar: (tmp) => ipcRenderer.invoke('sheets:testar', tmp),
+  sheetsReenviar: () => ipcRenderer.invoke('sheets:reenviar'),
+  sheetsSincronizarTudo: () => ipcRenderer.invoke('sheets:sincronizarTudo'),
+  onSheetsStatus: (cb) => { const fn = (_e, s) => cb(s); ipcRenderer.on('sheets:status', fn); return () => ipcRenderer.removeListener('sheets:status', fn); },
+});

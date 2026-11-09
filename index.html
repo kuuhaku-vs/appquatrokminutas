@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0e1527" />
+<title>Gerador de Minutas · Quatro K</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com;" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/png" href="icon-192.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" /><meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Minutas 4K" /><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<script>try{if(localStorage.getItem('gm-tema')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ============ TELA DE CARREGAMENTO ============ -->
+<div id="splashScreen" class="splash-screen" aria-label="Carregando sistema">
+  <div class="splash-card">
+    <img class="splash-logo brand-img" src="logo.png" alt="grupo QUATRO K">
+    <div class="splash-title">Gerador de Minutas</div>
+    <div class="splash-subtitle">Expedição · Grupo Quatro K</div>
+    <div class="splash-progress"><span></span></div>
+    <div class="splash-status" id="splashStatus">Inicializando sistema</div>
+  </div>
+</div>
+
+<div class="app">
+  <!-- ============ BARRA LATERAL ============ -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <img class="brand-img sb-logo" src="logo.png" alt="grupo QUATRO K">
+      <div class="sb-app">
+        <span class="sb-mark" data-ico="file"></span>
+        <div><strong>Gerador de Minutas</strong><small>Expedição · Despacho</small></div>
+      </div>
+    </div>
+
+    <nav class="sb-nav" aria-label="Navegação">
+      <span class="sb-label">Operação</span>
+      <button class="nav" data-go="nova" data-ico="filePlus"><span>Nova minuta</span><kbd>Alt 1</kbd></button>
+      <button class="nav" data-go="frete" id="btnFreteCortesia" type="button" data-ico="mail"><span>Frete cortesia</span></button>
+      <span class="sb-label">Consulta</span>
+      <button class="nav" data-go="historico" data-ico="history"><span>Histórico</span><kbd>Alt 2</kbd></button>
+      <span class="sb-label">Sistema</span>
+      <button class="nav" data-go="config" data-ico="settings"><span>Configurações</span><kbd>Alt 3</kbd></button>
+    </nav>
+
+    <div class="sb-foot">
+      <div class="sb-status" id="sbStatus" data-state="wait">
+        <span class="sb-dot"></span>
+        <div><strong id="sbStatusText">Verificando planilha…</strong><small id="sbStatusSub">registro_itens.csv</small></div>
+      </div>
+      <div class="sb-status sb-sheets" id="sbSheets" data-state="off" hidden>
+        <span class="sb-dot"></span>
+        <div><strong id="sbSheetsText">Google Sheets</strong><small id="sbSheetsSub"></small></div>
+      </div>
+      <div class="sb-tools">
+        <button class="sb-tool" id="btnAtalhos" title="Atalhos de teclado (F1)" data-ico="keyboard"><span>Atalhos</span></button>
+        <button class="sb-tool sb-tool-icon" id="btnTema" title="Alternar tema"></button>
+      </div>
+      <div class="sb-version">v2.3 · Grupo Quatro K</div>
+    </div>
+  </aside>
+
+  <!-- ============ CONTEÚDO ============ -->
+  <main class="content">
+    <!-- Barra superior (somente celular) -->
+    <div class="m-top">
+      <img class="m-top-logo" src="logo.png" alt="grupo QUATRO K">
+      <div class="m-top-title"><strong>Gerador de Minutas</strong><small id="mTopStatus">Expedição</small></div>
+      <button class="m-top-btn" data-tema-toggle title="Alternar tema"></button>
+    </div>
+
+    <!-- ===== NOVA MINUTA ===== -->
+    <section id="v-nova" class="view">
+      <header class="vh vh-sticky">
+        <div class="doc-id">
+          <span class="eyebrow">Minuta de despacho</span>
+          <div class="doc-line">
+            <label class="doc-num" title="Número da minuta (Ctrl+L)"><span>Nº</span><input id="numero" aria-label="Número da minuta" autocomplete="off" /></label>
+            <label class="date-chip" title="Data da minuta" data-ico="calendar"><input id="data" type="date" aria-label="Data" /></label>
+            <div id="draftStatus" class="draft-status">● Rascunho salvo automaticamente</div>
+          </div>
+        </div>
+        <div class="vh-actions">
+          <button class="ghost" id="btnNova" title="Nova minuta (Ctrl+N)" data-ico="plus"><span>Nova</span></button>
+          <span class="vh-sep"></span>
+          <button class="ghost" id="btnVer" title="Visualizar (F6)" data-ico="eye"><span>Visualizar</span></button>
+          <button class="ghost" id="btnImprimir" title="Imprimir (Ctrl+P)" data-ico="printer"><span>Imprimir</span></button>
+          <button class="ghost" id="btnCSV" title="Registrar apenas na planilha (Ctrl+Shift+S)" data-ico="table"><span>Registrar</span></button>
+          <button class="primary" id="btnPDF" title="Gerar PDF e registrar (Ctrl+S)" data-ico="file"><span>Gerar PDF</span></button>
+        </div>
+      </header>
+
+      <div class="nova-grid">
+        <div class="col-side">
+          <!-- Rota -->
+          <section class="card">
+            <div class="card-h"><h3 data-ico="route">Rota do envio</h3></div>
+            <div class="route">
+              <article class="party compact-party" data-party-card="remetente">
+                <div class="party-top">
+                  <span class="party-role origin" data-ico="pin">Remetente</span>
+                  <div class="party-actions">
+                    <button class="mini party-edit" data-edit="remetente" title="Editar remetente (F4)" data-ico="edit"><span>Editar</span></button>
+                    <button class="mini party-toggle" data-party-toggle="remetente" aria-expanded="false" data-ico="chevron"><span>Detalhes</span></button>
+                  </div>
+                </div>
+                <div id="summary-remetente" class="party-summary"></div>
+                <div id="box-remetente" class="party-details" hidden></div>
+              </article>
+              <div class="route-link" aria-hidden="true"><span></span></div>
+              <article class="party compact-party" data-party-card="destinatario">
+                <div class="party-top">
+                  <span class="party-role dest" data-ico="flag">Destinatário</span>
+                  <div class="party-actions">
+                    <button class="mini party-edit" data-edit="destinatario" title="Editar destinatário (F5)" data-ico="edit"><span>Editar</span></button>
+                    <button class="mini party-toggle" data-party-toggle="destinatario" aria-expanded="false" data-ico="chevron"><span>Detalhes</span></button>
+                  </div>
+                </div>
+                <div id="summary-destinatario" class="party-summary"></div>
+                <div id="box-destinatario" class="party-details" hidden></div>
+              </article>
+            </div>
+          </section>
+
+          <!-- Volumes -->
+          <section class="card packaging">
+            <div class="card-h"><h3 data-ico="package">Volumes e embalagens</h3><kbd class="kbd-soft">F3</kbd></div>
+            <div class="pack-form">
+              <label class="field"><span>Qtd.</span><input id="qtdEmbalagem" type="number" min="1" step="1" value="1" /></label>
+              <label class="field grow"><span>Tipo</span><select id="tipoEmbalagem"><option>Malote</option><option>Caixa</option><option>Envelope</option><option>Pacote</option><option>Outro</option></select></label>
+              <button class="primary icon-btn" id="addEmbalagem" title="Adicionar volume" data-ico="plus"><span class="sr">Adicionar</span></button>
+            </div>
+            <div id="embalagensLista" class="pack-list"></div>
+            <p class="hint">Combine tipos na mesma minuta, por exemplo 2 malotes + 1 caixa.</p>
+          </section>
+        </div>
+
+        <!-- Itens -->
+        <section class="card items">
+          <div class="card-h">
+            <h3 data-ico="list">Itens do envio <span class="section-counter" id="itensCounter">0 itens · 0 volumes</span></h3>
+            <div class="card-actions">
+              <button class="ghost" id="addManyItems" title="Colar vários itens de uma vez" data-ico="listPlus"><span>Vários</span></button>
+              <button class="primary" id="addItem" title="Adicionar item (F2)" data-ico="plus"><span>Adicionar item</span></button>
+            </div>
+          </div>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead><tr><th class="c-idx">#</th><th>Rem. / Setor</th><th>Dest. / Setor</th><th class="c-qtd">Qtd.</th><th>Conteúdo</th><th>Obs.</th><th class="c-act"></th></tr></thead>
+              <tbody id="itensBody"></tbody>
+            </table>
+            <div id="empty" class="empty">
+              <div class="empty-art" data-ico="package"></div>
+              <p>Nenhum item adicionado</p>
+              <small>Clique em <b>Adicionar item</b> ou pressione <kbd>F2</kbd>.</small>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="delivery-data-hidden" aria-hidden="true">
+        <input id="dataEntrega" type="hidden" />
+        <input id="horaEntrega" type="hidden" />
+        <input id="assinatura" type="hidden" />
+      </div>
+    </section>
+
+    <!-- ===== FRETE CORTESIA / MALOTE ===== -->
+    <section id="v-frete" class="view">
+      <header class="vh">
+        <div class="vh-title">
+          <button class="icon-btn ghost screen-home" type="button" data-go="nova" title="Voltar à minuta" data-ico="back"><span class="sr">Voltar</span></button>
+          <div><span class="eyebrow">Documento avulso</span><h2>Frete cortesia · Malote interno</h2></div>
+        </div>
+        <div class="vh-actions">
+          <button class="ghost" id="btnFreteLimpar" type="button" data-ico="reset"><span>Restaurar modelo</span></button>
+          <button class="primary" id="btnFreteImprimir" type="button" data-ico="printer"><span>Imprimir documento</span></button>
+        </div>
+      </header>
+
+      <div class="frete-grid">
+        <section class="card">
+          <div class="card-h"><h3 data-ico="printer">Formato de impressão</h3></div>
+          <label class="field"><span>Modelo</span>
+            <select id="freteFormato">
+              <option value="compacto">Compacto · 8 vias por folha A4 (100 × 70 mm)</option>
+              <option value="grande">Grande · 1 via por folha A4</option>
+            </select>
+          </label>
+          <p class="hint" id="freteFormatoHint">Modelo compacto: oito vias com linhas de corte, duas colunas e quatro linhas.</p>
+          <div class="note" data-ico="info"><span>A <b>data</b> fica em branco para preencher à mão e o <b>A/C</b> só aparece quando preenchido. Imprima em escala de 100%.</span></div>
+        </section>
+
+        <section class="card">
+          <div class="card-h"><h3 data-ico="edit">Dados do documento</h3></div>
+          <div class="fgrid">
+            <label class="field span2"><span>Título</span><input id="freteTitulo" value="FRETE CORTESIA – QUATRO K TÊXTIL LTDA" /></label>
+            <label class="field"><span>Identificação</span><input id="freteTipo" value="MALOTE INTERNO" /></label>
+            <label class="field"><span>A/C – quem vai receber <i>(opcional)</i></span><input id="freteAC" placeholder="Nome de quem vai receber" maxlength="100" /></label>
+          </div>
+          <div class="frete-route">
+            <div class="frete-side">
+              <span class="party-role origin" data-ico="pin">De</span>
+              <label class="field"><span>Empresa / unidade</span><input id="freteDe" value="QUATRO K TÊXTIL LTDA – ILHOTA / SC" /></label>
+              <label class="field"><span>Endereço de origem</span><textarea id="freteEndDe" rows="2">RUA JOSÉ GERALDINO BITTENCOURT, 470 – SALA G – PEDRA DE AMOLAR – ILHOTA / SC</textarea></label>
+              <label class="field"><span>CEP de origem</span><input id="freteCepDe" value="88320-000" /></label>
+            </div>
+            <div class="frete-side">
+              <span class="party-role dest" data-ico="flag">Para</span>
+              <label class="field"><span>Empresa / unidade</span><input id="fretePara" value="QUATRO K TÊXTIL LTDA – SÃO CAETANO DO SUL / SP" /></label>
+              <label class="field"><span>Endereço de destino</span><textarea id="freteEndPara" rows="2">RUA PARAIBA, 270/276 – CENTRO – SÃO CAETANO DO SUL / SP</textarea></label>
+              <label class="field"><span>CEP de destino</span><input id="freteCepPara" value="09531-070" /></label>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ===== HISTÓRICO ===== -->
+    <section id="v-historico" class="view">
+      <header class="vh">
+        <div class="vh-title"><div><span class="eyebrow">Consulta</span><h2>Histórico de minutas</h2></div></div>
+        <div class="vh-actions">
+          <button class="ghost" id="btnPlanilha" data-ico="table"><span>Abrir planilha</span></button>
+          <button class="ghost desktop-only" id="btnPasta" data-ico="folder"><span>Pasta de dados</span></button>
+        </div>
+      </header>
+      <section class="card">
+        <div class="toolbar">
+          <label class="search" data-ico="search"><input id="busca" placeholder="Buscar por nº, pessoa, conteúdo…" /></label>
+          <select id="histPeriodo" class="history-filter"><option value="all">Todas as datas</option><option value="today">Hoje</option><option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option></select>
+          <div id="histSummary" class="history-summary"></div>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl hist-tbl"><thead><tr><th>Nº</th><th>Data</th><th>Volumes</th><th>Itens</th><th>Pessoas</th><th class="c-act">Ações</th></tr></thead><tbody id="histBody"></tbody></table>
+        </div>
+      </section>
+    </section>
+
+    <!-- ===== CONFIGURAÇÕES ===== -->
+    <section id="v-config" class="view">
+      <header class="vh">
+        <div class="vh-title"><div><span class="eyebrow">Sistema</span><h2>Configurações</h2></div></div>
+        <div class="vh-actions">
+          <button class="ghost" id="btnDiagnostico" data-ico="pulse"><span>Diagnóstico</span></button>
+          <button class="ghost" id="btnVerificarDuplicatas" data-ico="check"><span>Verificar duplicidades</span></button>
+          <button class="ghost desktop-only" id="btnPasta2" data-ico="folder"><span>Abrir pasta</span></button>
+          <button class="primary" id="salvarCfg" data-ico="save"><span>Salvar</span></button>
+        </div>
+      </header>
+
+      <div class="cfg-grid">
+        <section class="card">
+          <div class="card-h"><h3 data-ico="hash">Numeração</h3></div>
+          <div class="fgrid">
+            <label class="field"><span>Próximo nº (sincronizado com a planilha)</span><input id="cfgProx" type="number" readonly /></label>
+            <label class="field"><span>Dígitos do número</span><input id="cfgDig" type="number" /></label>
+          </div>
+          <p class="hint">A sequência vem sempre da planilha compartilhada: maior número registrado + 1.</p>
+        </section>
+
+        <section class="card desktop-only">
+          <div class="card-h"><h3 data-ico="database">Planilha local (registro_itens.csv)</h3></div>
+          <p class="hint">Pasta onde fica o arquivo <b>registro_itens.csv</b>. Pode ser local ou de rede.</p>
+          <div id="cfgPlanilha" class="config-path"></div>
+          <div class="btn-row">
+            <button class="ghost" id="btnEscolherPlanilha" data-ico="folder"><span>Alterar local</span></button>
+            <button class="ghost" id="btnRestaurarPlanilha" data-ico="reset"><span>Usar caminho padrão</span></button>
+          </div>
+          <p class="hint small">Pasta de dados do aplicativo: <b id="cfgPath"></b></p>
+        </section>
+
+        <section class="card span-all" id="cardSheets">
+          <div class="card-h">
+            <h3 data-ico="table">Google Sheets</h3>
+            <div class="chips-check desktop-only"><label><input type="checkbox" id="cfgSheetsAtivo" checked /><span>Envio automático ativado</span></label></div>
+          </div>
+          <p class="hint desktop-only">Cada minuta gerada, registrada ou excluída é enviada automaticamente para uma planilha do Google (abas <b>Minutas</b> e <b>Itens</b>), com o PDF salvo no seu Drive. Se a internet cair, o envio fica na fila e é refeito sozinho.</p>
+          <div class="fgrid sheets-grid">
+            <label class="field span2"><span>URL do App da Web (termina em /exec)</span><input id="cfgSheetsUrl" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" spellcheck="false" /></label>
+            <label class="field"><span>Código de acesso (o mesmo do script)</span><input id="cfgSheetsToken" type="password" autocomplete="off" placeholder="Código definido no script" /></label>
+            <div class="field desktop-only"><span>Opções</span><div class="chips-check"><label><input type="checkbox" id="cfgSheetsPdf" checked /><span>Enviar o PDF para o Drive</span></label></div></div>
+          </div>
+          <div class="banco-choice desktop-only">
+            <span class="sub-title">Base de dados (numeração, histórico e exclusões)</span>
+            <div class="radio-cards">
+              <label class="radio-card"><input type="radio" name="cfgBanco" value="sheets" id="cfgBancoSheets" /><span><b>Google Sheets</b><small>Recomendado. A numeração e o histórico vêm da planilha do Google: funciona em qualquer computador com internet, sem depender da unidade U:.</small></span></label>
+              <label class="radio-card"><input type="radio" name="cfgBanco" value="csv" id="cfgBancoCsv" checked /><span><b>Planilha local / rede</b><small>A base é o registro_itens.csv da pasta abaixo. O Google recebe só uma cópia.</small></span></label>
+            </div>
+            <div class="chips-check" id="wrapCopiaCsv"><label><input type="checkbox" id="cfgCopiaCsv" checked /><span>Manter também uma cópia no registro_itens.csv (quando a pasta estiver acessível)</span></label></div>
+          </div>
+          <div class="note web-only" data-ico="info"><span>No celular ou navegador, a planilha do Google é a base de dados. Digite o <b>código de acesso</b> uma vez neste aparelho, toque em <b>Testar conexão</b> e depois em <b>Salvar</b>. O PDF é gerado pela opção <b>Salvar como PDF</b> da impressão.</span></div>
+          <div class="sheets-status" id="sheetsStatus" data-state="off"><span class="sb-dot"></span><span id="sheetsStatusText">Não configurado</span></div>
+          <div class="btn-row">
+            <button class="ghost" id="btnSheetsTestar" data-ico="pulse"><span>Testar conexão</span></button>
+            <button class="ghost desktop-only" id="btnSheetsReenviar" data-ico="refresh"><span>Reenviar pendentes</span></button>
+            <button class="ghost desktop-only" id="btnSheetsTudo" data-ico="history"><span>Enviar histórico completo</span></button>
+          </div>
+          <div class="note desktop-only" data-ico="info"><span>Primeira vez? Abra o arquivo <b>GoogleSheets_Script.gs</b> na pasta do Gerador e siga os 7 passos do topo dele. Depois cole a URL aqui, clique em <b>Testar conexão</b> e em <b>Salvar</b>.</span></div>
+        </section>
+
+        <section class="card span-all">
+          <div class="card-h"><h3 data-ico="printer">Formatação da impressão</h3><button class="ghost" id="btnPreviewPrint" data-ico="eye"><span>Pré-visualizar</span></button></div>
+          <p class="hint">Personalize o documento impresso. As alterações ficam salvas neste computador.</p>
+          <div class="fgrid g4">
+            <label class="field"><span>Modelo do documento</span><select id="printModelo"><option value="cortesia">Modelo simples</option><option value="detalhado">Modelo detalhado da minuta</option></select></label>
+            <label class="field"><span>Fonte</span><select id="printFonte"><option value="Times New Roman">Times New Roman</option><option value="Cambria">Cambria</option><option value="Arial">Arial</option><option value="Calibri">Calibri</option><option value="Georgia">Georgia</option><option value="Verdana">Verdana</option></select></label>
+            <label class="field"><span>Estilo do texto</span><select id="printPeso"><option value="normal">Normal</option><option value="bold">Mais negrito</option></select></label>
+            <label class="field"><span>Alinhamento do título</span><select id="printAlinhamento"><option value="center">Centralizado</option><option value="left">À esquerda</option><option value="right">À direita</option></select></label>
+            <label class="field"><span>Tamanho da fonte (pt)</span><input id="printTamanho" type="number" min="7" max="18" step="0.5" value="12" /></label>
+            <label class="field"><span>Tamanho do título (pt)</span><input id="printTitulo" type="number" min="10" max="24" step="0.5" value="14" /></label>
+            <label class="field"><span>Margens (mm)</span><input id="printMargem" type="number" min="5" max="25" step="1" value="16" /></label>
+            <label class="field"><span>Espaço entre blocos (mm)</span><input id="printEspaco" type="number" min="2" max="16" step="1" value="8" /></label>
+            <label class="field span2"><span>Texto do título</span><input id="printTextoTitulo" type="text" maxlength="100" value="FRETE CORTESIA – QUATRO K TÊXTIL LTDA" /></label>
+            <label class="field span2"><span>Texto do subtítulo</span><input id="printTextoSubtitulo" type="text" maxlength="100" value="MALOTE INTERNO" /></label>
+          </div>
+          <div class="print-fields">
+            <span class="sub-title">Informações que aparecem na impressão</span>
+            <div class="chips-check">
+              <label><input type="checkbox" id="printMostrarData" checked /><span>Data</span></label>
+              <label><input type="checkbox" id="printMostrarCnpj" /><span>CNPJ/CPF</span></label>
+              <label><input type="checkbox" id="printMostrarIE" /><span>Inscrição estadual</span></label>
+              <label><input type="checkbox" id="printMostrarContato" /><span>Contato</span></label>
+              <label><input type="checkbox" id="printMostrarTelefone" /><span>Telefone</span></label>
+              <label><input type="checkbox" id="printMostrarCep" checked /><span>CEP</span></label>
+              <label><input type="checkbox" id="printMostrarNumero" checked /><span>Número</span></label>
+              <label><input type="checkbox" id="printMostrarDeclaracao" /><span>Declaração</span></label>
+              <label><input type="checkbox" id="printMostrarEmbalagem" /><span>Tipo de embalagem</span></label>
+              <label><input type="checkbox" id="printMostrarVolumes" /><span>Quantidade de volumes</span></label>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ MODAIS ============ -->
+
+<!-- Item -->
+<div class="modal" id="mItem" aria-hidden="true"><div class="mbox">
+  <div class="m-head"><h3 id="mItemTitle">Adicionar Item</h3><button class="ghost sm" id="btnCadastroPessoas" type="button" data-ico="users"><span>Cadastro</span></button></div>
+  <div class="m-body">
+    <div class="fgrid">
+      <label class="field"><span>Rem. / Setor</span><input id="iPessoa" list="pessoasList" autocomplete="off" placeholder="Digite ou selecione…" /></label>
+      <label class="field"><span>Dest. / Setor</span><input id="iRef" list="destinosList" autocomplete="off" placeholder="Digite ou selecione…" /></label>
+      <label class="field"><span>Quantidade</span><input id="iQtd" type="number" value="1" min="1" /></label>
+      <label class="field"><span>Conteúdo</span><select id="iConteudo"><option value="Envelope">Envelope</option><option value="Pacote">Pacote</option><option value="Caixa">Caixa</option><option value="Outros">Outros</option></select></label>
+      <label class="field span2"><span>Observação</span><input id="iObs" /></label>
+    </div>
+    <datalist id="pessoasList"></datalist><datalist id="destinosList"></datalist>
+  </div>
+  <div class="m-foot"><button class="ghost" data-close>Cancelar</button><button class="ghost" id="iSalvarMais">Salvar e adicionar outro</button><button class="primary" id="iSalvar">Salvar item</button></div>
+</div></div>
+
+<!-- Cadastro de pessoas/setores -->
+<div class="modal cadastro-modal" id="mCadastroPessoas" aria-hidden="true">
+  <div class="mbox xl" role="dialog" aria-modal="true" aria-labelledby="cadastroTitle">
+    <div class="m-head">
+      <div class="m-title"><span class="m-badge" data-ico="users"></span><div><h3 id="cadastroTitle">Pessoas e setores</h3><p>Contatos usados no preenchimento automático dos itens.</p></div></div>
+      <div class="btn-row">
+        <button class="primary sm" id="cadPessoaNovo" type="button" data-ico="plus"><span>Novo cadastro</span></button>
+        <button class="ghost sm icon-btn" data-close type="button" title="Fechar" data-ico="close"><span class="sr">Fechar</span></button>
+      </div>
+    </div>
+    <div class="cad-toolbar">
+      <label class="search" data-ico="search"><input id="cadPessoaBusca" type="search" placeholder="Buscar pessoa ou setor…" autocomplete="off" /></label>
+      <div class="seg" role="tablist" aria-label="Filtrar cadastros">
+        <button class="cad-filter active" data-cad-filter="todos" type="button">Todos</button>
+        <button class="cad-filter" data-cad-filter="rem" type="button">Rem.</button>
+        <button class="cad-filter" data-cad-filter="dest" type="button">Dest.</button>
+        <button class="cad-filter" data-cad-filter="ambos" type="button">Ambos</button>
+      </div>
+    </div>
+    <div class="cad-body">
+      <section class="cad-list-panel">
+        <div class="cad-list-head"><strong>Cadastrados <span id="cadPessoaCount" class="section-counter">0</span></strong>
+          <select id="cadPessoaOrdenacao" class="sm" aria-label="Ordenação"><option value="recentes">Mais recentes</option><option value="az">Nome A-Z</option></select></div>
+        <div id="cadPessoasLista" class="cadastro-list"></div>
+      </section>
+      <aside class="cad-editor">
+        <span class="sub-title">Informações do cadastro</span>
+        <label class="field"><span>Nome / Setor</span><input id="cadPessoaNome" placeholder="Ex.: Mariana - Expedição" autocomplete="off" /></label>
+        <input id="cadPessoaRem" type="checkbox" checked hidden><input id="cadPessoaDest" type="checkbox" checked hidden>
+        <span class="field-label">Tipo de uso</span>
+        <div class="seg full">
+          <button class="cad-type active" data-cad-type="rem" type="button">Rem. / Setor</button>
+          <button class="cad-type active" data-cad-type="dest" type="button">Dest. / Setor</button>
+          <button class="cad-type" data-cad-type="ambos" type="button">Ambos</button>
+        </div>
+        <label class="field"><span>Observação <i>(opcional)</i></span><textarea id="cadPessoaObs" maxlength="100" rows="3" placeholder="Ex.: setor da embalagem, telefone…"></textarea></label>
+        <button class="primary" id="cadPessoaSalvar" type="button" data-ico="save"><span>Salvar</span></button>
+        <div class="note" data-ico="info"><span>Os cadastros ficam neste computador e também aprendem com os itens que você usa. Não vão para a planilha.</span></div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<!-- Exclusão (mantido para compatibilidade) -->
+<div class="modal" id="mExcluirMinuta" aria-hidden="true">
+  <div class="mbox sm-box" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+    <div class="confirm-head"><div class="action-symbol danger">!</div><div><div class="eyebrow">Ação administrativa</div><h3 id="deleteTitle">Excluir minuta</h3></div></div>
+    <div class="m-body">
+      <p>Você está prestes a remover uma minuta do banco de dados compartilhado.</p>
+      <div class="ref-grid"><div><span>Nº da minuta</span><strong id="deleteNumero">—</strong></div><div><span>Dest. / Setor</span><strong id="deletePessoa">—</strong></div></div>
+    </div>
+    <div class="m-foot"><button class="ghost" id="btnCancelarExclusao">Cancelar</button><button class="danger-primary" id="btnConfirmarExclusao"><span>Excluir minuta</span></button></div>
+  </div>
+</div>
+
+<!-- Confirmação global -->
+<div class="modal action-modal" id="mAcaoCorporativa" aria-hidden="true">
+  <div class="mbox sm-box" role="dialog" aria-modal="true" aria-labelledby="actionTitle">
+    <div class="confirm-head">
+      <div id="actionIcon" class="action-symbol warning" aria-hidden="true">?</div>
+      <div><div id="actionEyebrow" class="eyebrow">Confirmação</div><h3 id="actionTitle">Confirmar ação</h3></div>
+    </div>
+    <div class="m-body"><p id="actionMessage" class="action-message"></p><div id="actionDetail" class="action-detail"></div></div>
+    <div class="m-foot"><button class="ghost" id="btnCancelarAcao">Cancelar</button><button class="primary action-primary" id="btnConfirmarAcao">Confirmar</button></div>
+  </div>
+</div>
+
+<!-- Editar remetente/destinatário -->
+<div class="modal" id="mParte" aria-hidden="true"><div class="mbox lg">
+  <div class="m-head"><h3 id="mParteTitle">Editar</h3><button class="ghost sm icon-btn" data-close title="Fechar" data-ico="close"><span class="sr">Fechar</span></button></div>
+  <div class="m-body"><div id="mParteForm"></div></div>
+  <div class="m-foot"><button class="ghost" data-close>Cancelar</button><button class="ghost" id="pSalvarFixo">Salvar como padrão</button><button class="primary" id="pSalvar">Usar só nesta minuta</button></div>
+</div></div>
+
+<!-- Pré-visualização -->
+<div class="modal" id="mPrev" aria-hidden="true"><div class="mbox prev">
+  <div class="m-head"><h3>Pré-visualização · A4</h3><button class="ghost sm" data-close data-ico="close"><span>Fechar</span></button></div>
+  <iframe id="prevFrame"></iframe>
+</div></div>
+
+<!-- Itens em lote -->
+<div class="modal" id="mItensLote" aria-hidden="true"><div class="mbox lg">
+  <div class="m-head"><h3>Adicionar vários itens</h3><button class="ghost sm icon-btn" data-close title="Fechar" data-ico="close"><span class="sr">Fechar</span></button></div>
+  <div class="m-body">
+    <p class="hint">Uma linha por item, no formato <code>Remetente | Destino | Quantidade | Conteúdo | Observação</code></p>
+    <textarea id="itensLoteTexto" class="mono" rows="10" placeholder="Mariana | Expedição | 1 | Envelope | Urgente&#10;Eduardo | Laboratório | 2 | Caixa |"></textarea>
+  </div>
+  <div class="m-foot"><button class="ghost" data-close>Cancelar</button><button class="primary" id="btnProcessarLote">Adicionar itens</button></div>
+</div></div>
+
+<!-- Diagnóstico -->
+<div class="modal" id="mDiagnostico" aria-hidden="true"><div class="mbox lg">
+  <div class="m-head"><h3>Diagnóstico do sistema</h3><button class="ghost sm icon-btn" data-close title="Fechar" data-ico="close"><span class="sr">Fechar</span></button></div>
+  <div class="m-body"><div id="diagnosticoBody" class="diagnostic-grid"></div></div>
+  <div class="m-foot"><button class="ghost" id="btnDiagnosticoAtualizar" data-ico="refresh"><span>Atualizar</span></button></div>
+</div></div>
+
+<!-- Atalhos -->
+<div class="modal" id="mAtalhos" aria-hidden="true"><div class="mbox lg">
+  <div class="m-head"><h3>Atalhos de teclado</h3><button class="ghost sm icon-btn" data-close title="Fechar" data-ico="close"><span class="sr">Fechar</span></button></div>
+  <div class="m-body shortcut-cols">
+    <div class="shortcut-list">
+      <div class="shortcut-group">Navegação</div>
+      <div><span>Nova minuta</span><kbd>Alt</kbd><kbd>1</kbd></div>
+      <div><span>Histórico</span><kbd>Alt</kbd><kbd>2</kbd></div>
+      <div><span>Configurações</span><kbd>Alt</kbd><kbd>3</kbd></div>
+      <div><span>Abrir atalhos</span><kbd>F1</kbd></div>
+      <div><span>Abrir histórico</span><kbd>F8</kbd></div>
+      <div class="shortcut-group">Minuta</div>
+      <div><span>Nova minuta</span><kbd>Ctrl</kbd><kbd>N</kbd></div>
+      <div><span>Gerar PDF</span><kbd>Ctrl</kbd><kbd>S</kbd></div>
+      <div><span>Registrar na planilha</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>S</kbd></div>
+      <div><span>Imprimir</span><kbd>Ctrl</kbd><kbd>P</kbd></div>
+      <div><span>Visualizar minuta</span><kbd>F6</kbd></div>
+      <div><span>Gerar PDF</span><kbd>F7</kbd></div>
+    </div>
+    <div class="shortcut-list">
+      <div class="shortcut-group">Preenchimento</div>
+      <div><span>Adicionar item</span><kbd>F2</kbd></div>
+      <div><span>Adicionar volume</span><kbd>F3</kbd></div>
+      <div><span>Editar remetente</span><kbd>F4</kbd></div>
+      <div><span>Editar destinatário</span><kbd>F5</kbd></div>
+      <div><span>Avançar / adicionar</span><kbd>Enter</kbd></div>
+      <div><span>Confirmar a janela atual</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
+      <div class="shortcut-group">Histórico e geral</div>
+      <div><span>Buscar no histórico</span><kbd>Ctrl</kbd><kbd>F</kbd></div>
+      <div><span>Focar busca / número</span><kbd>Ctrl</kbd><kbd>L</kbd></div>
+      <div><span>Editar destinatário</span><kbd>Ctrl</kbd><kbd>D</kbd></div>
+      <div><span>Fechar janela</span><kbd>Esc</kbd></div>
+    </div>
+  </div>
+</div></div>
+
+<div id="toast"></div>
+<script src="config.js"></script>
+<script src="web-api.js"></script>
+<script src="ui.js"></script>
+<script src="logo.js"></script>
+<script src="print.js"></script>
+<script src="frete-cortesia.js"></script>
+<script src="app.js"></script>
+<script>if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});</script>
+</body>
+</html>

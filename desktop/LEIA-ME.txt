@@ -1,0 +1,57 @@
+GERADOR DE MINUTAS - Grupo Quatro K  (v2.3.0)
+=============================================
+
+PACOTE PORTÁTIL PARA WINDOWS - SOMENTE O GERADOR DE MINUTAS
+
+Esta versão contém apenas o Gerador de Minutas, em janela própria.
+A Busca de MC e a Central de Operações (NØVA) foram retiradas deste
+pacote e ficarão para um projeto separado.
+
+1. Extraia a pasta GeradorMinuta inteira para uma pasta local (não execute de dentro do ZIP).
+2. Abra GeradorMinuta.exe. Não é necessário executar como administrador.
+3. O aplicativo abre direto na tela "Nova Minuta" (Minuta, Histórico e Configurações no menu).
+
+ARQUIVOS IMPORTANTES
+- GeradorMinuta.exe: aplicativo.
+- resources/app/: interface, impressão e lógica do aplicativo.
+- dados/: configurações, histórico e PDFs gerados. Não apague esta pasta se quiser preservar seus dados.
+- Iniciar_Gerador_Com_Diagnostico.bat: abre o aplicativo registrando logs em dados\electron-startup.log.
+
+MIGRANDO DO NØVA
+Se você já usa o NØVA, copie a pasta "dados" dele (config.json, historico.json e a
+pasta minutas) para dentro desta pasta GeradorMinuta. A planilha compartilhada
+(registro_itens.csv) continua no mesmo local configurado, então a numeração segue normal.
+Não é preciso Python nem instalar dependências.
+
+IMPRESSÃO
+O Gerador mantém o print.js e o modelo de impressão da minuta. Frete Cortesia / Malote
+mantém os formatos compacto e A4 grande, com o campo A/C em destaque. Faça uma impressão
+de teste antes de usar em quantidade.
+
+NOVIDADES DA v2.1
+- Interface nova: menu lateral, número da minuta em destaque, rota Remetente → Destinatário,
+  ícones novos e status da planilha no canto inferior esquerdo (verde = conectada).
+- Tema claro e escuro: botão ao lado de "Atalhos", no menu lateral.
+- Impressão, PDF, planilha, histórico e atalhos continuam iguais.
+
+NOVIDADES DA v2.2
+- A tela da minuta cabe inteira na janela, sem barra de rolagem. A janela abre maximizada
+  e a interface se ajusta sozinha ao tamanho do monitor.
+- Layout pronto para celular (menu na parte de baixo, itens e histórico em cartões).
+- Google Sheets: cada minuta gerada, registrada ou excluída vai automaticamente para uma
+  planilha do Google (abas Minutas e Itens), com o PDF salvo no Drive.
+  Para ativar: abra GoogleSheets_Script.gs (nesta pasta), siga os 7 passos do topo dele
+  e depois cole a URL em Configurações › Google Sheets.
+  Se a internet cair, os envios ficam em dados\sheets-fila.json e são refeitos sozinhos.
+
+NOVIDADES DA v2.3
+- O Google Sheets pode ser a BASE DE DADOS: numeração, histórico, exclusões e
+  verificação de duplicidade vêm da planilha do Google, sem depender da unidade U:.
+  O registro_itens.csv continua recebendo uma cópia quando a pasta estiver acessível.
+- Para ativar:
+  1) Atualize o script no Google (instruções "ATUALIZANDO" no topo do
+     GoogleSheets_Script.gs) mantendo o mesmo código de acesso.
+  2) No Gerador: Configurações › Google Sheets › Base de dados: Google Sheets › Salvar.
+  3) Confirme "Enviar minutas existentes" para a numeração continuar de onde parou.
+- Com o Google como base é preciso internet para gerar minutas. Sem internet o Gerador
+  avisa e não registra a minuta (para nunca repetir número entre computadores).
