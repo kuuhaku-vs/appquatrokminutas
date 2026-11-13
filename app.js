@@ -625,9 +625,15 @@ async function renderHist() {
   const totalItens = list.reduce((n, h) => n + ((h.itens || []).length), 0);
   $('histSummary').innerHTML = `<span class="summary-chip">${list.length} minuta(s)</span><span class="summary-chip">${totalVolumes} volume(s)</span><span class="summary-chip">${totalItens} item(ns)</span>`;
 
-  $('histBody').innerHTML = list.map((h) => `<tr><td><span class="history-number">${esc(h.numero)}</span></td><td>${esc(h.data)}</td><td>${esc(h.volumes)}</td><td><span class="history-count">${(h.itens || []).length}</span></td><td>${esc([...new Set((h.itens || []).map((i) => i.pessoa).filter(Boolean))].join(', '))}</td>
-    <td class="act history-actions"><button title="Abrir / reeditar" data-o="${esc(h.numero)}">${ICO('edit')}<span>Abrir</span></button><button title="Duplicar minuta" data-dup="${esc(h.numero)}">${ICO('copy')}<span>Duplicar</span></button>${h.pdf ? `<button title="Abrir PDF" data-p="${esc(h.numero)}">${ICO('file')}<span>PDF</span></button>` : ''}<button class="del-history" title="Excluir minuta da planilha" data-x="${esc(h.numero)}">${ICO('trash')}</button></td></tr>`).join('') || '<tr><td colspan="6" class="hint">Nenhuma minuta encontrada com os filtros atuais.</td></tr>';
+  $('histBody').innerHTML = list.map((h) => `<tr data-num="${esc(h.numero)}" tabindex="0" title="Ver o que foi enviado"><td><span class="history-number">${esc(h.numero)}</span></td><td>${esc(h.data)}</td><td>${esc(h.volumes)}</td><td><span class="history-count">${(h.itens || []).length}</span></td><td>${esc([...new Set((h.itens || []).map((i) => i.pessoa).filter(Boolean))].join(', '))}</td>
+    <td class="act history-actions"><button title="Ver o que foi enviado" data-v="${esc(h.numero)}">${ICO('eye')}<span>Ver</span></button><button title="Abrir / reeditar" data-o="${esc(h.numero)}">${ICO('edit')}<span>Abrir</span></button><button title="Duplicar minuta" data-dup="${esc(h.numero)}">${ICO('copy')}<span>Duplicar</span></button>${h.pdf ? `<button title="Abrir PDF" data-p="${esc(h.numero)}">${ICO('file')}<span>PDF</span></button>` : ''}<button class="del-history" title="Excluir minuta da planilha" data-x="${esc(h.numero)}">${ICO('trash')}</button></td></tr>`).join('') || '<tr><td colspan="6" class="hint">Nenhuma minuta encontrada com os filtros atuais.</td></tr>';
 
+  // Clicar na linha (ou em "Ver") abre a janela com tudo o que foi enviado.
+  $('histBody').querySelectorAll('tr[data-num]').forEach((tr) => {
+    const abrir = () => abrirDetalheMinuta(hist.find((h) => h.numero === tr.dataset.num));
+    tr.onclick = (e) => { if (!e.target.closest('button:not([data-v])')) abrir(); };
+    tr.onkeydown = (e) => { if (e.key === 'Enter' && e.target === tr) { e.preventDefault(); abrir(); } };
+  });
   $('histBody').querySelectorAll('[data-o]').forEach((b) => (b.onclick = () => { preencher(hist.find((h) => h.numero === b.dataset.o), true); limparRascunho(); go('nova'); }));
   $('histBody').querySelectorAll('[data-dup]').forEach((b) => (b.onclick = async () => {
     const origem = hist.find((h) => h.numero === b.dataset.dup);
@@ -658,6 +664,46 @@ async function renderHist() {
     await renderHist();
   }));
 }
+// ---------- Detalhes da minuta (janela do histórico) ----------
+let detalheAtual = null;
+function abrirDetalheMinuta(h) {
+  if (!h) return;
+  detalheAtual = h.numero;
+  const lista = Array.isArray(h.itens) ? h.itens : [];
+  const totalQtd = lista.reduce((n, i) => n + (Number(i.qtd) || 0), 0);
+  const emb = h.embalagem || (Array.isArray(h.embalagens) ? h.embalagens.map((e) => `${e.quantidade} ${e.tipo}`).join(' / ') : '');
+  const parte = (papel, cls, icone, p = {}) => {
+    const end = [p.endereco, p.numero && 'Nº ' + p.numero, p.complemento, p.cep && 'CEP ' + p.cep].filter(Boolean).join(' · ');
+    const extra = [p.contato && 'Contato: ' + p.contato, p.telefone && 'Tel.: ' + p.telefone, p.cnpj && 'CNPJ/CPF: ' + p.cnpj].filter(Boolean);
+    return `<div class="det-party"><span class="party-role ${cls}">${ICO(icone)}${papel}</span><strong>${esc(p.nome) || 'Não informado'}</strong>${end ? `<span>${esc(end)}</span>` : ''}${extra.map((x) => `<span>${esc(x)}</span>`).join('')}</div>`;
+  };
+  $('detTitulo').textContent = 'Minuta nº ' + h.numero;
+  $('detSub').textContent = [h.data, h.carimbo && 'registrada em ' + h.carimbo].filter(Boolean).join(' · ');
+  $('detBody').innerHTML = `
+    <div class="det-chips">
+      <span class="summary-chip">${ICO('calendar')} ${esc(h.data) || 'Sem data'}</span>
+      <span class="summary-chip">${ICO('package')} ${esc(h.volumes || '0')} volume(s)${emb ? ' · ' + esc(emb) : ''}</span>
+      <span class="summary-chip">${ICO('list')} ${lista.length} item(ns) · ${totalQtd} unidade(s)</span>
+    </div>
+    <div class="det-route">${parte('Remetente', 'origin', 'pin', h.remetente)}<div class="det-arrow" aria-hidden="true">${ICO('arrowDown')}</div>${parte('Destinatário', 'dest', 'flag', h.destinatario)}</div>
+    <span class="sub-title">O que foi enviado</span>
+    ${lista.length ? `<div class="det-itens">${lista.map((i, n) => `
+      <div class="det-item">
+        <span class="det-n">${n + 1}</span>
+        <div class="det-quem"><div><small>De</small><b>${esc(i.pessoa) || '—'}</b></div><span class="det-seta" aria-hidden="true">→</span><div><small>Para</small><b>${esc(i.ref) || '—'}</b></div></div>
+        <div class="det-oque"><small>Conteúdo</small><b>${esc(String(i.qtd || 1))} × ${esc(i.conteudo) || '—'}</b></div>
+        ${i.obs ? `<div class="det-obs"><small>Observação</small>${esc(i.obs)}</div>` : ''}
+      </div>`).join('')}</div>` : '<p class="hint">Esta minuta foi registrada sem itens.</p>'}`;
+  $('detPdf').hidden = !h.pdf;
+  abrirModal($('mDetalhe'));
+  $('detBody').scrollTop = 0;
+}
+$('detPdf').onclick = () => { const h = hist.find((x) => x.numero === detalheAtual); if (h?.pdf) api.abrirPDF(h.pdf); };
+['detEditar:data-o', 'detDuplicar:data-dup'].forEach((par) => {
+  const [id, attr] = par.split(':');
+  $(id).onclick = () => { const b = [...$('histBody').querySelectorAll(`[${attr}]`)].find((x) => x.getAttribute(attr) === detalheAtual); fecharModal($('mDetalhe')); b?.click(); };
+});
+
 function dataISOHistoricoUI(v) {
   const s = String(v || '').trim();
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d,m,a]=s.split('/'); return `${a}-${m}-${d}`; }

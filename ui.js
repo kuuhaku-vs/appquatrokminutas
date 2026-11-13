@@ -55,6 +55,28 @@
   window.hidratarIcones = hidratar;
   hidratar();
 
+  // ---------- Janela aberta trava a rolagem da página ----------
+  // Enquanto houver qualquer janela (modal) aberta, só ela rola; a página volta a rolar quando a última fecha.
+  // No celular quem rola é a página inteira: ela é "congelada" no lugar e volta ao mesmo ponto ao fechar.
+  let travado = false, yGuardado = 0, fixou = false;
+  const travarRolagem = () => {
+    const aberta = !!document.querySelector('.modal.open');
+    if (aberta === travado) return;
+    travado = aberta;
+    const raiz = document.documentElement, pag = document.scrollingElement || raiz, st = document.body.style;
+    if (aberta) {
+      yGuardado = pag.scrollTop;
+      fixou = pag.scrollHeight > pag.clientHeight + 1;
+      if (fixou) { st.position = 'fixed'; st.top = -yGuardado + 'px'; st.left = '0'; st.right = '0'; }
+      raiz.classList.add('modal-aberto');
+    } else {
+      raiz.classList.remove('modal-aberto');
+      if (fixou) { st.position = ''; st.top = ''; st.left = ''; st.right = ''; window.scrollTo(0, yGuardado); fixou = false; }
+    }
+  };
+  new MutationObserver(travarRolagem).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+  travarRolagem();
+
   // ---------- Tema claro / escuro ----------
   const raiz = document.documentElement;
   const botoesTema = document.querySelectorAll('#btnTema, [data-tema-toggle]');
