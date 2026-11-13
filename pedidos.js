@@ -52,7 +52,7 @@
             <div class="card-actions"><button class="primary" id="pedIncluir" type="button" data-ico="plus" hidden disabled><span>Incluir na minuta</span></button></div>
           </div>
           <div id="pedAguardando" class="ped-lista"></div>
-          <span class="sub-title ped-sub">Atendidos recentemente</span>
+          <div class="ped-sub-row"><span class="sub-title ped-sub">Atendidos recentemente</span><button class="ghost sm ped-limpar" id="pedLimpar" type="button" data-ico="trash" hidden><span>Excluir recusados e cancelados</span></button></div>
           <div id="pedHistorico" class="ped-lista"></div>
         </section>
       </div>
@@ -85,13 +85,14 @@
   });
 
   // ---------- Estado ----------
-  let pedidos = [], podeAtender = false, entrou = false, carregando = false, primeiraCarga = true;
+  let pedidos = [], podeAtender = false, podeExcluir = false, entrou = false, carregando = false, primeiraCarga = true;
   let conhecidos = new Set();           // pedidos aguardando já avisados (quem atende)
   const situacaoAnterior = new Map();    // situação dos meus pedidos (quem pede)
   const AUTH = () => window.AUTH;
   const pode = (p) => !!AUTH()?.pode?.(p);
   const atende = () => pode('minutas.criar') || pode('minutas.editar');
-  const usaPedidos = () => entrou && (atende() || pode('pedidos.criar'));
+  const usaPedidos = () => entrou && (atende() || pode('pedidos.criar') || pode('pedidos.excluir'));
+  const descartavel = (p) => p.situacao === 'RECUSADO' || p.situacao === 'CANCELADO';
   const aguardando = () => pedidos.filter((p) => p.situacao === 'AGUARDANDO');
   const naMinuta = () => new Set(window.MINUTA?.idsDePedidos?.() || []);
   const resumo = (p) => `${p.de} → ${p.para}`;
@@ -106,7 +107,7 @@
         if (!silencioso) window.toast?.(r?.versao && parseFloat(r.versao) < 2.6 ? 'Os pedidos de envio precisam da versão 2.6 do script do Google.' : (r?.error || 'Não foi possível carregar os pedidos.'), true);
         return;
       }
-      pedidos = r.pedidos || []; podeAtender = !!r.podeAtender;
+      pedidos = r.pedidos || []; podeAtender = !!r.podeAtender; podeExcluir = !!r.podeExcluir;
       notificar();
       atualizarAvisos();
       if (document.body.dataset.screen === 'pedidos') render();
@@ -168,7 +169,7 @@
     else if (p.situacao === 'CANCELADO') estado = '<span class="perm-chip">Cancelado</span>';
     else if (dentro) estado = '<span class="perm-chip all">Na minuta aberta</span>';
     else if (!podeAtender) estado = '<span class="perm-chip wait">Aguardando o malote</span>';
-    const acoes = p.situacao !== 'AGUARDANDO' ? '' : (podeAtender && !meu)
+    const acoes = p.situacao !== 'AGUARDANDO' ? (podeExcluir && descartavel(p) ? `<button type="button" class="del" data-ped-excluir="${esc(p.id)}" title="Excluir o pedido">${ico('trash')}<span>Excluir</span></button>` : '') : (podeAtender && !meu)
       ? `<button type="button" class="del" data-ped-recusar="${esc(p.id)}" title="Recusar o pedido">${ico('close')}<span>Recusar</span></button>`
       : meu ? `<button type="button" class="del" data-ped-cancelar="${esc(p.id)}" title="Cancelar o pedido">${ico('close')}<span>Cancelar</span></button>` : '';
     const caixa = selecionavel ? `<input type="checkbox" class="ped-check" data-ped-sel="${esc(p.id)}" ${dentro ? 'disabled' : ''} aria-label="Incluir ${esc(resumo(p))}" />` : '';
@@ -193,6 +194,9 @@
     $('pedAguardando').innerHTML = fila.length
       ? fila.map((p) => linhaPedido(p, { selecionavel: podeAtender, dentro: dentro.has(p.id) })).join('')
       : `<div class="us-empty">${podeAtender ? 'Nenhum pedido aguardando. Quando alguém pedir um envio, ele aparece aqui.' : 'Você não tem pedidos aguardando. Use o formulário para pedir um envio.'}</div>`;
+    const lixo = feitos.filter(descartavel).length;
+    $('pedLimpar').hidden = !podeExcluir || lixo < 2;
+    $('pedLimpar').querySelector('span').textContent = `Excluir recusados e cancelados (${lixo})`;
     $('pedHistorico').innerHTML = feitos.length ? feitos.map((p) => linhaPedido(p)).join('') : '<div class="us-empty">Nenhum pedido atendido ainda.</div>';
     atualizarBotaoIncluir();
   }
@@ -251,6 +255,24 @@
     $('pedPara').focus();
   }
 
+  async function excluir(ids) {
+    const lista = pedidos.filter((p) => ids.includes(p.id) && descartavel(p));
+    if (!lista.length) return;
+    const um = lista.length === 1;
+    const ok = await window.confirmarAcaoCorporativa?.({
+      titulo: um ? 'Excluir pedido' : 'Excluir pedidos',
+      mensagem: um ? `Excluir o pedido ${esc(resumo(lista[0]))} (${lista[0].situacao.toLowerCase()})?` : `Excluir ${lista.length} pedidos recusados ou cancelados?`,
+      detalhe: 'Eles saem da lista e da aba Pedidos da planilha. Não dá para desfazer.',
+      confirmacao: um ? 'Excluir pedido' : `Excluir ${lista.length} pedidos`, tipo: 'danger',
+    });
+    if (!ok) return;
+    const r = await api.auth('pedidos.excluir', { ids: lista.map((p) => p.id) });
+    if (!r?.ok) return window.toast?.(r?.error || 'Não foi possível excluir.', true);
+    pedidos = pedidos.filter((p) => !lista.some((x) => x.id === p.id));
+    render();
+    window.toast?.(r.excluidos === 1 ? 'Pedido excluído.' : `${r.excluidos} pedidos excluídos.`);
+  }
+
   let recusando = null;
   async function cancelar(id) {
     const p = pedidos.find((x) => x.id === id); if (!p) return;
@@ -281,6 +303,8 @@
   // Cliques nas listas (tela e janela usam o mesmo desenho).
   function ligarLista(box) {
     box.addEventListener('click', (e) => {
+      const x = e.target.closest('[data-ped-excluir]');
+      if (x) return excluir([x.dataset.pedExcluir]);
       const c = e.target.closest('[data-ped-cancelar]'), r = e.target.closest('[data-ped-recusar]');
       if (c) return cancelar(c.dataset.pedCancelar);
       if (r) return abrirRecusa(r.dataset.pedRecusar);
@@ -298,6 +322,7 @@
   $('pedBannerAvisos').addEventListener('click', async () => { try { await Notification.requestPermission(); } catch {} atualizarAvisos(); });
   $('pedEnviar').addEventListener('click', enviarPedido);
   $('pedNovoCard').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); enviarPedido(); } });
+  $('pedLimpar').addEventListener('click', () => excluir(pedidos.filter(descartavel).map((p) => p.id)));
   $('pedAtualizar').addEventListener('click', () => carregar({ silencioso: false }));
 
   // ---------- Ciclo ----------

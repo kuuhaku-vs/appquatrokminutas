@@ -26,6 +26,7 @@
     { id: 'minutas.criar', grupo: 'alterar', nome: 'Criar minutas', dica: 'Gerar e registrar minutas novas' },
     { id: 'minutas.editar', grupo: 'alterar', nome: 'Alterar minutas', dica: 'Reabrir e gravar de novo minutas já registradas' },
     { id: 'minutas.excluir', grupo: 'alterar', nome: 'Excluir minutas', dica: 'Remover minutas da planilha' },
+    { id: 'pedidos.excluir', grupo: 'alterar', nome: 'Excluir pedidos', dica: 'Apagar pedidos de envio recusados ou cancelados' },
     { id: 'cadastros.editar', grupo: 'alterar', nome: 'Alterar cadastros', dica: 'Pessoas, setores e remetente/destinatário padrão' },
     { id: 'usuarios.gerenciar', grupo: 'admin', nome: 'Gerenciar usuários', dica: 'Só o perfil Administrador cria usuários e define o que cada um pode fazer' },
   ];
@@ -36,7 +37,7 @@
     consulta: { nome: 'Consulta', dica: 'Vê o histórico e pede envios.', perms: ['historico.ver', 'pedidos.criar'] },
     personalizado: { nome: 'Personalizado', dica: 'Você marca item por item.', perms: null },
   };
-  const TELAS = { nova: ['minutas.criar', 'minutas.editar'], pedidos: ['pedidos.criar', 'minutas.criar', 'minutas.editar'], historico: ['historico.ver'], frete: ['frete.usar'], config: ['config.acessar'], usuarios: ['usuarios.gerenciar'] };
+  const TELAS = { nova: ['minutas.criar', 'minutas.editar'], pedidos: ['pedidos.criar', 'pedidos.excluir', 'minutas.criar', 'minutas.editar'], historico: ['historico.ver'], frete: ['frete.usar'], config: ['config.acessar'], usuarios: ['usuarios.gerenciar'] };
 
   // ---------- estado e sessão guardada ----------
   const S = { usuario: null, token: '', expira: 0, lembrar: false, legado: false, appCarregado: false, logado: false, cadastroAberto: true };

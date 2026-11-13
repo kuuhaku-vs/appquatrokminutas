@@ -53,6 +53,8 @@
  *   • Quem cria minutas é avisado no Gerador e inclui o pedido no malote.
  *     Ao gerar o PDF ou registrar a minuta, o pedido fica INCLUÍDO com o
  *     número dela. Excluir a minuta devolve o pedido para AGUARDANDO.
+ *   • Pedidos RECUSADOS ou CANCELADOS podem ser excluídos da aba por quem
+ *     tem "Excluir pedidos" (o Administrador tem; os outros só se ele liberar).
  *   • Enquanto nenhum usuário existir, tudo funciona como antes
  *     (só com o código de acesso).
  *   • ESQUECI A SENHA DO ADMINISTRADOR: apague as linhas da aba
@@ -67,14 +69,14 @@ const ABA_MINUTAS = 'Minutas';
 const ABA_ITENS = 'Itens';
 const ABA_USUARIOS = 'Usuarios';
 const ABA_PEDIDOS = 'Pedidos';
-const VERSAO_SCRIPT = '2.6';
+const VERSAO_SCRIPT = '2.7';
 const CAB_MINUTAS = ['Minuta', 'Data', 'Volumes', 'Embalagem', 'Remetente', 'Destinatário', 'Qtd. itens', 'Pessoas', 'PDF', 'Atualizado em', 'Origem', 'Dados', 'Usuário'];
 const CAB_PEDIDOS = ['ID', 'Criado em', 'Usuário', 'Nome', 'De', 'Para', 'Qtd.', 'Conteúdo', 'Obs.', 'Situação', 'Minuta', 'Atendido por', 'Atendido em', 'Motivo'];
 const MAX_PEDIDOS_ABERTOS = 30; // pedidos aguardando por pessoa
 const CAB_USUARIOS = ['Usuário', 'Nome', 'Perfil', 'Permissões', 'Ativo', 'Senha (protegida)', 'Sessão', 'Criado em', 'Último acesso'];
 
 // O que cada usuário pode acessar e alterar. O perfil "admin" tem tudo.
-const PERMISSOES = ['minutas.criar', 'minutas.editar', 'minutas.excluir', 'historico.ver', 'pedidos.criar', 'frete.usar', 'cadastros.editar', 'config.acessar', 'usuarios.gerenciar'];
+const PERMISSOES = ['minutas.criar', 'minutas.editar', 'minutas.excluir', 'historico.ver', 'pedidos.criar', 'pedidos.excluir', 'frete.usar', 'cadastros.editar', 'config.acessar', 'usuarios.gerenciar'];
 const PERFIS = {
   admin: PERMISSOES,
   operador: ['minutas.criar', 'minutas.editar', 'historico.ver', 'frete.usar', 'cadastros.editar'],
@@ -112,6 +114,7 @@ function doPost(e) {
     if (req.acao === 'pedidos.criar') { exigir(quem, 'pedidos.criar'); return resposta(criarPedido(ss, quem, req)); }
     if (req.acao === 'pedidos.listar') return resposta(listarPedidos(ss, quem));
     if (req.acao === 'pedidos.cancelar') return resposta(cancelarPedido(ss, quem, req));
+    if (req.acao === 'pedidos.excluir') { exigir(quem, 'pedidos.excluir'); return resposta(excluirPedidos(ss, req)); }
     if (req.acao === 'usuarios.listar') { exigir(quem, 'usuarios.gerenciar'); return resposta({ ok: true, usuarios: usuarios.map(publico), permissoes: PERMISSOES, perfis: PERFIS }); }
     if (req.acao === 'usuarios.salvar') { exigir(quem, 'usuarios.gerenciar'); return resposta(salvarUsuario(ss, abaU, usuarios, quem, req)); }
     if (req.acao === 'usuarios.excluir') { exigir(quem, 'usuarios.gerenciar'); return resposta(excluirUsuario(abaU, usuarios, quem, req)); }
@@ -629,14 +632,15 @@ function criarPedido(ss, quem, req) {
 // Quem monta minutas vê todos os pedidos aguardando e os atendidos recentemente;
 // quem só pede vê os próprios.
 function listarPedidos(ss, quem) {
-  const atende = podeAtenderPedidos(quem);
+  const exclui = quem.permissoes.indexOf('pedidos.excluir') >= 0;
+  const atende = podeAtenderPedidos(quem) || exclui; // quem exclui precisa ver os pedidos de todos
   const meus = quem.permissoes.indexOf('pedidos.criar') >= 0;
   if (!atende && !meus) throw erroAcesso('permissao', 'Seu usuário não tem permissão para ver pedidos de envio.');
   const lista = lerPedidos(ss).lista;
   const usuario = quem.usuario || 'codigo';
   const aguardando = lista.filter(function (p) { return p.situacao === SIT_AGUARDANDO && (atende || p.usuario === usuario); });
   const outros = lista.filter(function (p) { return p.situacao !== SIT_AGUARDANDO && (atende || p.usuario === usuario); }).reverse().slice(0, atende ? 40 : 60);
-  return { ok: true, podeAtender: atende, pedidos: aguardando.concat(outros).map(pedidoPublico) };
+  return { ok: true, podeAtender: podeAtenderPedidos(quem), podeExcluir: exclui, pedidos: aguardando.concat(outros).map(pedidoPublico) };
 }
 
 function cancelarPedido(ss, quem, req) {
@@ -677,4 +681,17 @@ function devolverPedidos(ss, num) {
     p.situacao = SIT_AGUARDANDO; p.minuta = ''; p.atendidoPor = ''; p.atendidoEm = '';
     gravarPedido(dados.aba, p);
   });
+}
+
+// Remove da aba pedidos que foram recusados ou cancelados (os outros ficam como histórico).
+function excluirPedidos(ss, req) {
+  const ids = (Array.isArray(req.ids) ? req.ids : [req.id]).map(String).filter(String);
+  if (!ids.length) throw erroAcesso('pedido', 'Nenhum pedido informado.');
+  const dados = lerPedidos(ss);
+  const alvo = dados.lista.filter(function (p) { return ids.indexOf(p.id) >= 0; });
+  if (!alvo.length) throw erroAcesso('pedido', 'Pedido não encontrado.');
+  const bloqueado = alvo.filter(function (p) { return p.situacao !== SIT_RECUSADO && p.situacao !== SIT_CANCELADO; })[0];
+  if (bloqueado) throw erroAcesso('pedido', 'Só dá para excluir pedidos recusados ou cancelados. O pedido ' + bloqueado.de + ' → ' + bloqueado.para + ' está ' + bloqueado.situacao.toLowerCase() + '.');
+  alvo.sort(function (a, b) { return b.linha - a.linha; }).forEach(function (p) { dados.aba.deleteRow(p.linha); });
+  return { ok: true, excluidos: alvo.length };
 }

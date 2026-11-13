@@ -55,6 +55,7 @@ Quem tem a permissão **Pedir envios** (o perfil Consulta tem) abre **Pedidos**,
 - Em **Ver e incluir**, marque os pedidos e clique em **Incluir no malote**: eles viram itens da minuta aberta (marcados como *pedido*).
 - Ao **gerar o PDF** ou **registrar**, o pedido fica **incluído** com o número da minuta, e quem pediu é avisado. Excluir a minuta devolve o pedido para *aguardando*.
 - Quem pediu pode cancelar enquanto o pedido aguarda; quem monta o malote pode recusar, com um motivo que a pessoa vê.
+- Pedidos **recusados** ou **cancelados** podem ser excluídos por quem tem a permissão **Excluir pedidos** (o Administrador tem; para outros, marque no perfil Personalizado).
 - Os pedidos ficam na aba **Pedidos** da planilha.
 
 ## Publicar no GitHub Pages (uma vez só)

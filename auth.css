@@ -206,6 +206,10 @@
 .ped-hint { margin: -6px 0 14px; }
 .ped-enviar { margin-top: 14px; justify-content: flex-end; }
 .ped-sub { margin-top: 18px; }
+.ped-sub-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.ped-sub-row .ped-sub { margin-bottom: 10px; }
+.ped-limpar { margin-bottom: 8px; color: var(--danger) !important; }
+.ped-limpar[hidden] { display: none; }
 .ped-lista { display: flex; flex-direction: column; gap: 8px; }
 .ped-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
 .ped-item[data-ped-linha] { cursor: pointer; }
