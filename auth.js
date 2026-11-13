@@ -26,7 +26,7 @@
     { id: 'minutas.editar', grupo: 'alterar', nome: 'Alterar minutas', dica: 'Reabrir e gravar de novo minutas já registradas' },
     { id: 'minutas.excluir', grupo: 'alterar', nome: 'Excluir minutas', dica: 'Remover minutas da planilha' },
     { id: 'cadastros.editar', grupo: 'alterar', nome: 'Alterar cadastros', dica: 'Pessoas, setores e remetente/destinatário padrão' },
-    { id: 'usuarios.gerenciar', grupo: 'alterar', nome: 'Gerenciar usuários', dica: 'Criar usuários e definir o que cada um pode fazer' },
+    { id: 'usuarios.gerenciar', grupo: 'admin', nome: 'Gerenciar usuários', dica: 'Só o perfil Administrador cria usuários e define o que cada um pode fazer' },
   ];
   const TODAS = PERMS.map((p) => p.id);
   const PERFIS = {
@@ -139,7 +139,7 @@
       <label class="lg-keep"><input type="checkbox" id="lgLembrar" /> Manter conectado neste aparelho</label>
       <button class="primary lg-go" id="lgEntrar" type="submit">Entrar</button>
       <p class="lg-msg" id="lgMsg" role="alert"></p>
-      <button class="lg-link" id="lgTrocar" type="button">Não tem usuário? Peça seu cadastro</button>
+      <button class="lg-link" id="lgTrocar" type="button">Não tem usuário? Crie seu cadastro</button>
     </form>
   </div>
 </div>
@@ -226,16 +226,16 @@
   function mostrarLogin(modo, aviso) {
     lg.dataset.modo = modo;
     const primeiro = modo === 'primeiro', cadastro = modo === 'cadastro';
-    $('lgTitulo').textContent = primeiro ? 'Primeiro acesso' : cadastro ? 'Pedir cadastro' : saudacao() + '!';
+    $('lgTitulo').textContent = primeiro ? 'Primeiro acesso' : cadastro ? 'Criar cadastro' : saudacao() + '!';
     $('lgSub').textContent = primeiro
       ? 'Crie o usuário administrador. Ele cadastra as outras pessoas e define o que cada uma pode fazer.'
-      : cadastro ? 'Escolha seu usuário e sua senha. Você entra assim que o administrador aprovar o cadastro.'
+      : cadastro ? 'Escolha seu usuário e sua senha. Você entra com o perfil Consulta, que vê o histórico. O administrador pode liberar mais.'
       : 'Entre com seu usuário para abrir o Gerador de Minutas.';
-    $('lgEntrar').textContent = primeiro ? 'Criar administrador e entrar' : cadastro ? 'Enviar cadastro' : 'Entrar';
+    $('lgEntrar').textContent = primeiro ? 'Criar administrador e entrar' : cadastro ? 'Criar cadastro e entrar' : 'Entrar';
     $('lgSenha').autocomplete = primeiro || cadastro ? 'new-password' : 'current-password';
-    $('lgTrocar').textContent = cadastro ? 'Já tenho usuário: entrar' : 'Não tem usuário? Peça seu cadastro';
+    $('lgTrocar').textContent = cadastro ? 'Já tenho usuário: entrar' : 'Não tem usuário? Crie seu cadastro';
     $('lgTrocar').hidden = primeiro || (!cadastro && !S.cadastroAberto);
-    legenda(primeiro ? 'O malote espera o primeiro administrador.' : cadastro ? 'Seu cadastro segue para o administrador aprovar.' : 'Escreva seu usuário: ele vai no A/C do malote.');
+    legenda(primeiro ? 'O malote espera o primeiro administrador.' : cadastro ? 'Seu malote de boas-vindas: perfil Consulta.' : 'Escreva seu usuário: ele vai no A/C do malote.');
     mensagem(aviso || '', true);
     lg.classList.remove('is-ok', 'is-go', 'is-error', 'is-busy');
     $('lgEntrar').disabled = false;
@@ -320,10 +320,10 @@
     legenda('Conferindo com a planilha…');
     const r = primeiro
       ? await api.auth('auth.primeiro', { codigo: $('lgCodigo').value, usuario, nome: $('lgNome').value.trim(), senha, lembrar })
-      : cadastro ? await api.auth('auth.cadastrar', { usuario, nome: $('lgNome').value.trim(), senha })
+      : cadastro ? await api.auth('auth.cadastrar', { usuario, nome: $('lgNome').value.trim(), senha, lembrar })
       : await api.auth('auth.login', { usuario, senha, lembrar });
 
-    if (cadastro && r?.ok) {
+    if (cadastro && r?.ok && !r.sessao) {
       campoSenha.value = ''; $('lgSenha2').value = ''; $('lgNome').value = '';
       mostrarLogin('login', 'Cadastro enviado. Você poderá entrar assim que o administrador aprovar.');
       return legenda('Cadastro enviado para aprovação.');

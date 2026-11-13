@@ -42,8 +42,10 @@
  *     cria os demais em Usuários, dentro do Gerador, e marca o que cada
  *     um pode acessar e alterar. Quem valida as permissões é este script.
  *   • CADASTRO PELA TELA DE LOGIN: a pessoa preenche nome, usuário e senha
- *     e fica como PENDENTE. Ela só entra depois que o administrador aprovar
- *     e escolher o perfil. Para desligar, mude PERMITIR_CADASTRO para false.
+ *     e já entra com o perfil CONSULTA (só vê o histórico). Só o
+ *     administrador muda o perfil dela, em Usuários. Para desligar o
+ *     cadastro, mude PERMITIR_CADASTRO para false.
+ *   • Só o perfil Administrador gerencia usuários.
  *   • Enquanto nenhum usuário existir, tudo funciona como antes
  *     (só com o código de acesso).
  *   • ESQUECI A SENHA DO ADMINISTRADOR: apague as linhas da aba
@@ -73,8 +75,8 @@ const SESSAO_HORAS = 12;          // sessão normal
 const SESSAO_DIAS_LEMBRAR = 30;   // com "Manter conectado"
 const SENHA_MINIMO = 6;
 const SENHA_ITERACOES = 1000;     // PBKDF2-HMAC-SHA256 (o Apps Script é lento; não aumente demais)
-const PERMITIR_CADASTRO = true;   // true: a tela de login deixa a pessoa pedir um cadastro (o administrador aprova)
-const MAX_PENDENTES = 30;         // cadastros aguardando aprovação ao mesmo tempo
+const PERMITIR_CADASTRO = true;   // true: a tela de login deixa a pessoa criar o próprio usuário (sempre como Consulta)
+const MAX_CADASTROS_HORA = 20;    // limite de cadastros pela tela de login por hora
 const MAX_TENTATIVAS = 5;         // depois disso o login espera 5 minutos
 const CAB_ITENS = ['Minuta', 'Data', 'Item', 'Rem. / Setor', 'Dest. / Setor', 'Qtd.', 'Conteúdo', 'Obs.'];
 
@@ -319,7 +321,8 @@ function normalizarUsuario(v) { return String(v == null ? '' : v).trim().toLower
 function permissoesEfetivas(perfil, lista) {
   if (perfil === 'admin') return PERMISSOES.slice();
   const base = PERFIS[perfil] ? PERFIS[perfil] : (Array.isArray(lista) ? lista : String(lista || '').split(/[,;\s]+/));
-  const p = PERMISSOES.filter(function (x) { return base.indexOf(x) >= 0; });
+  // Gerenciar usuários é só do perfil Administrador.
+  const p = PERMISSOES.filter(function (x) { return base.indexOf(x) >= 0 && x !== 'usuarios.gerenciar'; });
   // Quem altera ou exclui precisa enxergar o histórico para achar a minuta.
   if ((p.indexOf('minutas.editar') >= 0 || p.indexOf('minutas.excluir') >= 0) && p.indexOf('historico.ver') < 0) p.push('historico.ver');
   return p;
@@ -480,21 +483,24 @@ function entrar(ss, abaU, usuarios, req) {
   return { ok: true, usuario: publico(u), sessao: criarSessao(u, !!req.lembrar) };
 }
 
-// Cadastro feito pela própria pessoa na tela de login: fica PENDENTE até o administrador aprovar.
+// Cadastro feito pela própria pessoa na tela de login: entra sempre como CONSULTA.
+// O que vier no pedido além de nome, usuário e senha é ignorado; só o administrador muda o perfil.
 function pedirCadastro(ss, abaU, usuarios, req) {
   if (!usuarios.length) throw erroAcesso('primeiro', 'Nenhum usuário cadastrado ainda. Faça o primeiro acesso.');
   if (!PERMITIR_CADASTRO) throw erroAcesso('fechado', 'O cadastro pela tela de login está desligado. Peça um usuário ao administrador.');
-  if (tentativas('cadastros') >= 10) throw erroAcesso('bloqueado', 'Muitos cadastros em pouco tempo. Tente de novo em alguns minutos.');
-  if (usuarios.filter(function (x) { return x.pendente; }).length >= MAX_PENDENTES) throw erroAcesso('cheio', 'Há muitos cadastros aguardando aprovação. Fale com o administrador.');
+  const cache = CacheService.getScriptCache();
+  const feitos = Number(cache.get('cadastros')) || 0;
+  if (feitos >= MAX_CADASTROS_HORA) throw erroAcesso('bloqueado', 'Muitos cadastros em pouco tempo. Tente de novo mais tarde ou fale com o administrador.');
   const nome = validarNomeUsuario(req.usuario);
   if (usuarios.some(function (x) { return x.usuario === nome; })) throw erroAcesso('existe', 'Já existe um usuário "' + nome + '". Escolha outro.');
   const senha = validarSenhaNova(req.senha);
-  contarFalha('cadastros');
-  gravarUsuario(abaU, {
+  cache.put('cadastros', String(feitos + 1), 3600);
+  const agora = agoraTexto(ss);
+  const u = gravarUsuario(abaU, {
     usuario: nome, nome: String(req.nome || '').trim().slice(0, 60) || nome, perfil: 'consulta', permissoes: permissoesEfetivas('consulta'),
-    ativo: false, pendente: true, hash: protegerSenha(senha), sv: 1, criadoEm: agoraTexto(ss), ultimoAcesso: ''
+    ativo: true, pendente: false, hash: protegerSenha(senha), sv: 1, criadoEm: agora, ultimoAcesso: agora
   });
-  return { ok: true, pendente: true };
+  return { ok: true, usuario: publico(u), sessao: criarSessao(u, !!req.lembrar) };
 }
 
 function trocarSenha(abaU, quem, req) {

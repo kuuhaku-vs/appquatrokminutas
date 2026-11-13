@@ -116,7 +116,6 @@
 .lg-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .lgn [data-only] { display: none; }
 .lgn[data-modo="primeiro"] [data-only], .lgn[data-modo="cadastro"] [data-only="novo"] { display: flex; }
-.lgn[data-modo="cadastro"] .lg-keep { display: none; }
 .lg-link { align-self: flex-start; padding: 4px 0; border: 0; background: none; color: var(--accent-2); font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .lg-link:hover { text-decoration: underline; }
 .lg-link[hidden] { display: none; }

@@ -35,9 +35,10 @@ Enquanto o script antigo estiver publicado, ou enquanto nenhum usuário existir,
 | Consulta | Só o histórico |
 | Personalizado | O administrador marca item por item |
 
-Permissões: *Histórico*, *Frete cortesia*, *Configurações* (acessar) e *Criar minutas*, *Alterar minutas*, *Excluir minutas*, *Alterar cadastros*, *Gerenciar usuários* (alterar).
+Permissões: *Histórico*, *Frete cortesia*, *Configurações* (acessar) e *Criar minutas*, *Alterar minutas*, *Excluir minutas*, *Alterar cadastros* (alterar). *Gerenciar usuários* é só do Administrador.
 
-- **Cadastro pela tela de login:** em *Não tem usuário? Peça seu cadastro* a pessoa informa nome, usuário e senha. O pedido fica **pendente** (aparece no topo de *Usuários*, com um contador no menu) e ela só entra depois que o administrador aprovar e escolher o perfil. Para desligar, mude `PERMITIR_CADASTRO` para `false` no script.
+- **Cadastro pela tela de login:** em *Não tem usuário? Crie seu cadastro* a pessoa informa nome, usuário e senha e já entra com o perfil **Consulta** (só o histórico). Só o administrador muda o perfil dela, em *Usuários*. Para desligar o cadastro, mude `PERMITIR_CADASTRO` para `false` no script.
+- Só o perfil **Administrador** gerencia usuários.
 - **Vínculo com o Google Sheets:** a URL do script (e, no Windows, as demais opções do Google) fica no fim da tela *Usuários*, visível só para quem gerencia usuários. Num aparelho ainda sem vínculo o app abre sem login, só para o vínculo ser feito ali.
 - Quem confere a sessão e a permissão é o script do Google, em cada pedido. A tela só esconde o que não está liberado.
 - Os usuários ficam na aba **Usuarios** da planilha. A senha é guardada protegida (hash com sal); não edite as colunas *Senha (protegida)* e *Sessão*.
