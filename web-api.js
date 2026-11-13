@@ -74,7 +74,7 @@
     return {
       numero: String(m.numero || ''), data: m.data || '', dataISO: m.dataISO || '', volumes: String(m.volumes || ''), embalagem: m.embalagem || '',
       remetente: m.remetente?.nome || '', destinatario: m.destinatario?.nome || '',
-      itens: (m.itens || []).map((i) => ({ pessoa: i.pessoa || '', ref: i.ref || '', qtd: i.qtd || 1, conteudo: i.conteudo || '', obs: i.obs || '' })),
+      itens: (m.itens || []).map((i) => ({ pessoa: i.pessoa || '', ref: i.ref || '', qtd: i.qtd || 1, conteudo: i.conteudo || '', obs: i.obs || '', pedidoId: i.pedidoId || undefined })),
       origem: 'Web · ' + (/(iPhone|iPad|Android)/i.exec(navigator.userAgent)?.[1] || 'navegador'),
       dados: { remetente: m.remetente || {}, destinatario: m.destinatario || {}, embalagens: m.embalagens || [], tipoEntrega: m.tipoEntrega || '', veiculo: m.veiculo || '', carimbo: m.carimbo || '' },
     };

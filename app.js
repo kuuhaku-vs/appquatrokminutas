@@ -195,6 +195,7 @@ function go(v) {
   if (destino === 'historico') renderHist();
   if (destino === 'config') renderCfg();
   if (destino === 'usuarios') window.AUTH?.renderUsuarios?.();
+  if (destino === 'pedidos') window.PEDIDOS?.render?.();
 }
 document.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => go(b.dataset.go)));
 function fecharModal(modal) {
@@ -344,7 +345,7 @@ function readForm(root, prefix) { const o = {}; root.querySelectorAll(`[data-f^=
 
 // ---------- Itens ----------
 function renderItens() {
-  $('itensBody').innerHTML = itens.map((it, i) => `<tr><td><span class="item-index">${i + 1}</span></td><td>${esc(it.pessoa)}</td><td>${esc(it.ref)}</td><td>${esc(it.qtd)}</td><td><span class="content-tag">${esc(it.conteudo)}</span></td><td>${esc(it.obs) || '<span class="muted-cell">—</span>'}</td>
+  $('itensBody').innerHTML = itens.map((it, i) => `<tr><td><span class="item-index">${i + 1}</span></td><td>${esc(it.pessoa)}</td><td>${esc(it.ref)}</td><td>${esc(it.qtd)}</td><td><span class="content-tag">${esc(it.conteudo)}</span></td><td>${it.pedidoId ? '<span class="pedido-tag" title="Veio de um pedido de envio">pedido</span> ' : ''}${esc(it.obs) || (it.pedidoId ? '' : '<span class="muted-cell">—</span>')}</td>
     <td class="act"><button title="Editar" data-e="${i}">${ICO('edit')}</button><button title="Duplicar" data-c="${i}">${ICO('copy')}</button><button class="del" title="Excluir" data-d="${i}">${ICO('trash')}</button></td></tr>`).join('');
   $('empty').style.display = itens.length ? 'none' : 'flex';
   const volumes = itens.reduce((n, it) => n + (Math.max(1, parseInt(it.qtd, 10) || 1)), 0);
@@ -353,7 +354,8 @@ function renderItens() {
   $('itensBody').querySelectorAll('[data-c]').forEach((b) => (b.onclick = () => {
     const origem = itens[+b.dataset.c];
     if (!origem) return;
-    itens.splice(+b.dataset.c + 1, 0, { ...origem });
+    const copia = { ...origem }; delete copia.pedidoId; // a cópia não é o pedido
+    itens.splice(+b.dataset.c + 1, 0, copia);
     renderItens();
     salvarRascunhoDebounced();
     toast('Item duplicado.');
@@ -371,6 +373,7 @@ function abrirItem(i = -1) {
 function salvarItem(mais) {
   const it = { pessoa: normalizarNomeCadastro($('iPessoa').value), ref: normalizarNomeCadastro($('iRef').value), qtd: Math.max(1, parseInt($('iQtd').value, 10) || 1), conteudo: $('iConteudo').value || 'Envelope', obs: $('iObs').value.trim() };
   if (!it.pessoa) return toast('Informe o remetente do item.', true);
+  if (editIdx >= 0 && itens[editIdx]?.pedidoId) it.pedidoId = itens[editIdx].pedidoId; // continua ligado ao pedido
   if (editIdx < 0) itens.push(it); else itens[editIdx] = it;
   aprenderPessoaDoItem(it.pessoa, 'rem');
   if (it.ref) aprenderPessoaDoItem(it.ref, 'dest');
@@ -378,6 +381,16 @@ function salvarItem(mais) {
   renderItens(); draftDirty = true; salvarRascunhoDebounced();
   if (mais) abrirItem(-1); else fecharModal($('mItem'));
 }
+// Usado pelos pedidos de envio (pedidos.js) para incluir itens na minuta aberta.
+window.MINUTA = {
+  numero: () => $('numero').value,
+  idsDePedidos: () => itens.map((i) => i.pedidoId).filter(Boolean),
+  adicionarItens(lista) {
+    lista.forEach((it) => { itens.push({ ...it }); aprenderPessoaDoItem(it.pessoa, 'rem'); if (it.ref) aprenderPessoaDoItem(it.ref, 'dest'); });
+    atualizarAutocompletes(); renderItens(); draftDirty = true; salvarRascunhoDebounced();
+  },
+};
+const avisarRegistro = () => window.dispatchEvent(new Event('gm-minuta-registrada'));
 $('addItem').onclick = () => abrirItem(-1);
 $('btnCadastroPessoas').onclick = abrirCadastroPessoas;
 $('cadPessoaSalvar').onclick = salvarCadastroPessoa;
@@ -562,11 +575,11 @@ $('btnCSV').onclick = async () => {
       m = coletar();
       const retry = await api.gerarCSV(m);
       if (!retry.ok) return toast(retry.error, true);
-      modoRevisao = true; await avancarNumero(m); toast('Itens registrados na planilha: ' + retry.path); return;
+      modoRevisao = true; await avancarNumero(m); avisarRegistro(); toast('Itens registrados na planilha: ' + retry.path); return;
     }
     return toast(r.error, true);
   }
-  modoRevisao = true; await avancarNumero(m); toast('Itens registrados na planilha: ' + r.path);
+  modoRevisao = true; await avancarNumero(m); avisarRegistro(); toast('Itens registrados na planilha: ' + r.path);
 };
 $('btnPDF').onclick = async () => {
   if (!hasApi) return toast('Disponível no programa instalado.', true);
@@ -583,6 +596,7 @@ $('btnPDF').onclick = async () => {
     if (!r.ok) return toast((r.error || '').includes('EBUSY') ? 'Feche a planilha no Excel e tente novamente.' : (r.error || 'Não foi possível gerar o PDF.'), true);
     modoRevisao = true;
     await avancarNumero(m);
+    avisarRegistro();
     toast('Minuta gerada e itens registrados na planilha.');
     if (await confirmarNovaAposSalvar()) novaMinuta();
   } catch (err) {

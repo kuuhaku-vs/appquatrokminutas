@@ -20,6 +20,7 @@
   // ---------- permissões (mesmos nomes do GoogleSheets_Script.gs) ----------
   const PERMS = [
     { id: 'historico.ver', grupo: 'acessar', nome: 'Histórico', dica: 'Consultar as minutas registradas' },
+    { id: 'pedidos.criar', grupo: 'acessar', nome: 'Pedir envios', dica: 'Lançar pedidos de envio para quem monta os malotes' },
     { id: 'frete.usar', grupo: 'acessar', nome: 'Frete cortesia', dica: 'Imprimir o documento de frete cortesia' },
     { id: 'config.acessar', grupo: 'acessar', nome: 'Configurações', dica: 'Numeração, planilha e formatação da impressão' },
     { id: 'minutas.criar', grupo: 'alterar', nome: 'Criar minutas', dica: 'Gerar e registrar minutas novas' },
@@ -32,10 +33,10 @@
   const PERFIS = {
     admin: { nome: 'Administrador', dica: 'Acesso total, incluindo usuários.', perms: TODAS },
     operador: { nome: 'Operador', dica: 'Cria e altera minutas. Não exclui.', perms: ['minutas.criar', 'minutas.editar', 'historico.ver', 'frete.usar', 'cadastros.editar'] },
-    consulta: { nome: 'Consulta', dica: 'Só vê o histórico.', perms: ['historico.ver'] },
+    consulta: { nome: 'Consulta', dica: 'Vê o histórico e pede envios.', perms: ['historico.ver', 'pedidos.criar'] },
     personalizado: { nome: 'Personalizado', dica: 'Você marca item por item.', perms: null },
   };
-  const TELAS = { nova: ['minutas.criar', 'minutas.editar'], historico: ['historico.ver'], frete: ['frete.usar'], config: ['config.acessar'], usuarios: ['usuarios.gerenciar'] };
+  const TELAS = { nova: ['minutas.criar', 'minutas.editar'], pedidos: ['pedidos.criar', 'minutas.criar', 'minutas.editar'], historico: ['historico.ver'], frete: ['frete.usar'], config: ['config.acessar'], usuarios: ['usuarios.gerenciar'] };
 
   // ---------- estado e sessão guardada ----------
   const S = { usuario: null, token: '', expira: 0, lembrar: false, legado: false, appCarregado: false, logado: false, cadastroAberto: true };
@@ -229,7 +230,7 @@
     $('lgTitulo').textContent = primeiro ? 'Primeiro acesso' : cadastro ? 'Criar cadastro' : saudacao() + '!';
     $('lgSub').textContent = primeiro
       ? 'Crie o usuário administrador. Ele cadastra as outras pessoas e define o que cada uma pode fazer.'
-      : cadastro ? 'Escolha seu usuário e sua senha. Você entra com o perfil Consulta, que vê o histórico. O administrador pode liberar mais.'
+      : cadastro ? 'Escolha seu usuário e sua senha. Você entra com o perfil Consulta: vê o histórico e pede envios. O administrador pode liberar mais.'
       : 'Entre com seu usuário para abrir o Gerador de Minutas.';
     $('lgEntrar').textContent = primeiro ? 'Criar administrador e entrar' : cadastro ? 'Criar cadastro e entrar' : 'Entrar';
     $('lgSenha').autocomplete = primeiro || cadastro ? 'new-password' : 'current-password';
@@ -366,6 +367,7 @@
     carregarApp();
     setTimeout(() => window.verificarPlanilhaUI?.(), 1500);
     setTimeout(avisarPendentes, 5000);
+    window.dispatchEvent(new Event('gm-entrou'));
   }
   // Script do Google antigo (ou programa do Windows sem Google): funciona como antes, sem login.
   function entrarSemLogin(motivo) {

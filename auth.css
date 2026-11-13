@@ -10,6 +10,8 @@
 .np-tela-historico [data-go="historico"],
 .np-tela-config [data-go="config"],
 .np-tela-usuarios [data-go="usuarios"],
+.np-tela-pedidos [data-go="pedidos"],
+.np-pedidos-criar #pedNovoCard,
 .np-minutas-criar #btnNova,
 .np-minutas-criar [data-dup],
 .np-minutas-editar [data-o],
@@ -197,3 +199,52 @@
   .us-last b { display: inline; }
   .perfil-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* ---------- Pedidos de envio ---------- */
+.ped-grid { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.np-pedidos-criar .ped-grid { grid-template-columns: minmax(0, 1fr); }
+.ped-hint { margin: -6px 0 14px; }
+.ped-enviar { margin-top: 14px; justify-content: flex-end; }
+.ped-sub { margin-top: 18px; }
+.ped-lista { display: flex; flex-direction: column; gap: 8px; }
+.ped-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); }
+.ped-item[data-ped-linha] { cursor: pointer; }
+.ped-item[data-ped-linha]:hover { border-color: var(--accent-ring); }
+.ped-item:has(.ped-check:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.ped-item.dentro { opacity: .75; }
+.ped-item.feito { background: transparent; }
+.ped-item:not(:has(.ped-check)) { grid-template-columns: minmax(0, 1fr) auto; }
+.ped-check { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--accent); cursor: pointer; }
+.ped-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ped-rota { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.ped-rota b { color: var(--text); font-weight: 650; overflow-wrap: anywhere; }
+.ped-rota span { color: var(--muted); }
+.ped-main small { color: var(--muted); font-size: 11.5px; }
+.ped-main .det-obs { margin-top: 2px; }
+.ped-estado { margin-top: 2px; }
+.ped-acoes { display: flex; gap: 4px; }
+.perm-chip.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.ped-banner { display: flex; align-items: center; gap: 12px; margin: -4px 0 14px; padding: 10px 12px 10px 14px; border-radius: 12px; border: 1px solid rgba(245, 158, 11, .35); background: var(--warn-soft); }
+.ped-banner[hidden] { display: none; }
+.ped-banner-ico { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--warn); color: #1b1300; animation: pedSino 1.6s ease-in-out 2; }
+.ped-banner-ico .ico { width: 17px; height: 17px; }
+@keyframes pedSino { 0%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(-12deg); } 20%, 40% { transform: rotate(12deg); } 50% { transform: rotate(0); } }
+.ped-banner > div { flex: 1; min-width: 0; }
+.ped-banner strong { display: block; color: var(--text); font-size: 13px; }
+.ped-banner small { display: block; color: var(--text-2); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pedido-tag { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 99px; background: var(--warn-soft); color: var(--warn); font-size: 10.5px; font-weight: 700; vertical-align: 1px; }
+.mbox.ped-modal { overflow: hidden; }
+.mbox.ped-modal .m-body { overflow: auto; min-height: 0; }
+.mbox.ped-modal .m-head, .mbox.ped-modal .m-foot { flex: none; }
+#pedModalTodos { margin-right: auto; }
+#pedModalTodos[hidden] { display: none; }
+@media (max-width: 1100px) { .ped-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) {
+  .nav { position: relative; }
+  .nav .nav-badge { position: absolute; top: 3px; left: calc(50% + 6px); }
+  .ped-banner { flex-wrap: wrap; margin-top: 0; }
+  .ped-banner #pedBannerVer { flex: 1 1 100%; }
+  .ped-banner #pedBannerAvisos { display: none; }
+  .ped-item .ped-acoes span { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .ped-banner-ico { animation: none; } }

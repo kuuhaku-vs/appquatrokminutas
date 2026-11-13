@@ -48,6 +48,15 @@ Permissões: *Histórico*, *Frete cortesia*, *Configurações* (acessar) e *Cria
 - **Esqueci a senha do administrador:** na planilha, apague as linhas da aba *Usuarios* (deixe a linha 1) e refaça o primeiro acesso.
 - No programa do Windows, o login vale quando o Google Sheets está configurado. Sem URL do Google (só planilha local), ele abre sem login.
 
+## Pedidos de envio
+Quem tem a permissão **Pedir envios** (o perfil Consulta tem) abre **Pedidos**, informa de quem para quem vai o envio, quantidade, conteúdo e observação, e envia.
+
+- Quem cria minutas é avisado: contador em **Pedidos** no menu, faixa amarela na **Nova minuta** e aviso na tela (e notificação do sistema, se ativar "Avisar com o app minimizado"). O app confere a cada minuto.
+- Em **Ver e incluir**, marque os pedidos e clique em **Incluir no malote**: eles viram itens da minuta aberta (marcados como *pedido*).
+- Ao **gerar o PDF** ou **registrar**, o pedido fica **incluído** com o número da minuta, e quem pediu é avisado. Excluir a minuta devolve o pedido para *aguardando*.
+- Quem pediu pode cancelar enquanto o pedido aguarda; quem monta o malote pode recusar, com um motivo que a pessoa vê.
+- Os pedidos ficam na aba **Pedidos** da planilha.
+
 ## Publicar no GitHub Pages (uma vez só)
 **Settings → Pages** → *Build and deployment*: Source = **Deploy from a branch**, Branch = **main** / **(root)** → **Save**.
 Em 1–2 minutos o endereço aparece na mesma página.

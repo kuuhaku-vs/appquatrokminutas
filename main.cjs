@@ -733,7 +733,7 @@ function minutaParaSheets(m) {
     numero: String(m.numero || ''), data: m.data || '', dataISO: m.dataISO || '',
     volumes: String(m.volumes || ''), embalagem: m.embalagem || '',
     remetente: m.remetente?.nome || '', destinatario: m.destinatario?.nome || '',
-    itens: (m.itens || []).map((i) => ({ pessoa: i.pessoa || '', ref: i.ref || '', qtd: i.qtd || 1, conteudo: i.conteudo || '', obs: i.obs || '' })),
+    itens: (m.itens || []).map((i) => ({ pessoa: i.pessoa || '', ref: i.ref || '', qtd: i.qtd || 1, conteudo: i.conteudo || '', obs: i.obs || '', pedidoId: i.pedidoId || undefined })),
     origem: require('os').hostname(),
     dados: { remetente: m.remetente || {}, destinatario: m.destinatario || {}, embalagens: m.embalagens || [], tipoEntrega: m.tipoEntrega || '', veiculo: m.veiculo || '', carimbo: m.carimbo || '' },
   };
@@ -869,7 +869,7 @@ function historicoDeSheets(lista) {
 ipcMain.handle('auth:sessao', (_e, token) => { sessaoUsuario = String(token || ''); return true; });
 ipcMain.handle('auth:chamar', async (_e, p) => {
   const acao = String(p?.acao || '');
-  if (!/^(auth|usuarios)\.[a-z]+$/.test(acao)) return { ok: false, error: 'Ação inválida.' };
+  if (!/^(auth|usuarios|pedidos)\.[a-z]+$/.test(acao)) return { ok: false, error: 'Ação inválida.' };
   if (!sheetsCfg().url) return { ok: false, codigo: 'semurl', error: 'O Google Sheets não está configurado neste computador.' };
   try { return await sheetsPost({ ...(p?.dados || {}), acao }, 30000); }
   catch (e) { return { ok: false, error: String(e?.message || e), codigo: e?.codigo, versao: e?.versao }; }

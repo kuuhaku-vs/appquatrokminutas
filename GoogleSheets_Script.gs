@@ -46,6 +46,13 @@
  *     administrador muda o perfil dela, em Usuários. Para desligar o
  *     cadastro, mude PERMITIR_CADASTRO para false.
  *   • Só o perfil Administrador gerencia usuários.
+ *
+ *  PEDIDOS DE ENVIO (versão 2.6):
+ *   • Aba "Pedidos": quem tem "Pedir envios" (o perfil Consulta tem) lança
+ *     um pedido dizendo de quem para quem vai o envio.
+ *   • Quem cria minutas é avisado no Gerador e inclui o pedido no malote.
+ *     Ao gerar o PDF ou registrar a minuta, o pedido fica INCLUÍDO com o
+ *     número dela. Excluir a minuta devolve o pedido para AGUARDANDO.
  *   • Enquanto nenhum usuário existir, tudo funciona como antes
  *     (só com o código de acesso).
  *   • ESQUECI A SENHA DO ADMINISTRADOR: apague as linhas da aba
@@ -59,16 +66,19 @@ const NOME_PASTA_PDF = 'Minutas Quatro K - PDFs'; // criada ao lado desta planil
 const ABA_MINUTAS = 'Minutas';
 const ABA_ITENS = 'Itens';
 const ABA_USUARIOS = 'Usuarios';
-const VERSAO_SCRIPT = '2.5';
+const ABA_PEDIDOS = 'Pedidos';
+const VERSAO_SCRIPT = '2.6';
 const CAB_MINUTAS = ['Minuta', 'Data', 'Volumes', 'Embalagem', 'Remetente', 'Destinatário', 'Qtd. itens', 'Pessoas', 'PDF', 'Atualizado em', 'Origem', 'Dados', 'Usuário'];
+const CAB_PEDIDOS = ['ID', 'Criado em', 'Usuário', 'Nome', 'De', 'Para', 'Qtd.', 'Conteúdo', 'Obs.', 'Situação', 'Minuta', 'Atendido por', 'Atendido em', 'Motivo'];
+const MAX_PEDIDOS_ABERTOS = 30; // pedidos aguardando por pessoa
 const CAB_USUARIOS = ['Usuário', 'Nome', 'Perfil', 'Permissões', 'Ativo', 'Senha (protegida)', 'Sessão', 'Criado em', 'Último acesso'];
 
 // O que cada usuário pode acessar e alterar. O perfil "admin" tem tudo.
-const PERMISSOES = ['minutas.criar', 'minutas.editar', 'minutas.excluir', 'historico.ver', 'frete.usar', 'cadastros.editar', 'config.acessar', 'usuarios.gerenciar'];
+const PERMISSOES = ['minutas.criar', 'minutas.editar', 'minutas.excluir', 'historico.ver', 'pedidos.criar', 'frete.usar', 'cadastros.editar', 'config.acessar', 'usuarios.gerenciar'];
 const PERFIS = {
   admin: PERMISSOES,
   operador: ['minutas.criar', 'minutas.editar', 'historico.ver', 'frete.usar', 'cadastros.editar'],
-  consulta: ['historico.ver'],
+  consulta: ['historico.ver', 'pedidos.criar'],
   personalizado: null
 };
 const SESSAO_HORAS = 12;          // sessão normal
@@ -99,6 +109,9 @@ function doPost(e) {
     const quem = autenticar(req, usuarios);
     if (req.acao === 'auth.eu') return resposta({ ok: true, usuario: publico(quem), sessao: renovarSessao(quem, req.sessao) });
     if (req.acao === 'auth.senha') return resposta(trocarSenha(abaU, quem, req));
+    if (req.acao === 'pedidos.criar') { exigir(quem, 'pedidos.criar'); return resposta(criarPedido(ss, quem, req)); }
+    if (req.acao === 'pedidos.listar') return resposta(listarPedidos(ss, quem));
+    if (req.acao === 'pedidos.cancelar') return resposta(cancelarPedido(ss, quem, req));
     if (req.acao === 'usuarios.listar') { exigir(quem, 'usuarios.gerenciar'); return resposta({ ok: true, usuarios: usuarios.map(publico), permissoes: PERMISSOES, perfis: PERFIS }); }
     if (req.acao === 'usuarios.salvar') { exigir(quem, 'usuarios.gerenciar'); return resposta(salvarUsuario(ss, abaU, usuarios, quem, req)); }
     if (req.acao === 'usuarios.excluir') { exigir(quem, 'usuarios.gerenciar'); return resposta(excluirUsuario(abaU, usuarios, quem, req)); }
@@ -126,6 +139,7 @@ function doPost(e) {
       exigir(quem, 'minutas.excluir');
       const r = removerLinhas(abaM, num, true);
       removerLinhas(abaI, num, false);
+      if (r.qtd) devolverPedidos(ss, num);
       return resposta({ ok: true, removidas: r.qtd });
     }
 
@@ -164,7 +178,8 @@ function doPost(e) {
       }
       ordenar(abaM, CAB_MINUTAS.length);
       ordenar(abaI, CAB_ITENS.length);
-      return resposta({ ok: true, pdf: linkPdf, url: ss.getUrl() });
+      const pedidos = marcarPedidosIncluidos(ss, itens, numeroTexto, quem);
+      return resposta({ ok: true, pdf: linkPdf, url: ss.getUrl(), pedidosIncluidos: pedidos });
     }
 
     return resposta({ ok: false, error: 'Ação desconhecida: ' + req.acao });
@@ -551,4 +566,115 @@ function excluirUsuario(abaU, usuarios, quem, req) {
   if (!adminsAtivos(usuarios.filter(function (x) { return x !== u; }))) throw erroAcesso('admin', 'Precisa existir pelo menos um administrador ativo.');
   abaU.deleteRow(u.linha);
   return { ok: true, excluido: nome };
+}
+
+// ============================================================
+//  PEDIDOS DE ENVIO
+// ============================================================
+const SIT_AGUARDANDO = 'AGUARDANDO', SIT_INCLUIDO = 'INCLUÍDO', SIT_CANCELADO = 'CANCELADO', SIT_RECUSADO = 'RECUSADO';
+
+function podeAtenderPedidos(quem) { return quem.permissoes.indexOf('minutas.criar') >= 0 || quem.permissoes.indexOf('minutas.editar') >= 0; }
+
+function textoLimpo(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max); }
+
+function lerPedidos(ss) {
+  const aba = obterAba(ss, ABA_PEDIDOS, CAB_PEDIDOS);
+  const ultima = aba.getLastRow();
+  if (ultima < 2) return { aba: aba, lista: [] };
+  const lista = aba.getRange(2, 1, ultima - 1, CAB_PEDIDOS.length).getValues().map(function (r, i) {
+    if (!r[0]) return null;
+    return {
+      linha: i + 2, id: String(r[0]), criadoEm: textoCelula(r[1], ss, 'dd/MM/yyyy HH:mm:ss'), usuario: String(r[2] || ''), nome: String(r[3] || ''),
+      de: String(r[4] || ''), para: String(r[5] || ''), qtd: Number(r[6]) || 1, conteudo: String(r[7] || ''), obs: String(r[8] || ''),
+      situacao: String(r[9] || SIT_AGUARDANDO).toUpperCase(), minuta: textoCelula(r[10], ss), atendidoPor: String(r[11] || ''),
+      atendidoEm: textoCelula(r[12], ss, 'dd/MM/yyyy HH:mm:ss'), motivo: String(r[13] || '')
+    };
+  }).filter(function (x) { return x; });
+  return { aba: aba, lista: lista };
+}
+
+function gravarPedido(aba, p) {
+  const linha = p.linha || (aba.getLastRow() + 1);
+  aba.getRange(linha, 1, 1, CAB_PEDIDOS.length).setNumberFormat('@').setValues([[
+    p.id, p.criadoEm, p.usuario, p.nome, p.de, p.para, String(p.qtd), p.conteudo, p.obs, p.situacao, p.minuta || '', p.atendidoPor || '', p.atendidoEm || '', p.motivo || ''
+  ]]);
+  p.linha = linha;
+  return p;
+}
+
+function pedidoPublico(p) {
+  return { id: p.id, criadoEm: p.criadoEm, usuario: p.usuario, nome: p.nome, de: p.de, para: p.para, qtd: p.qtd, conteudo: p.conteudo, obs: p.obs,
+    situacao: p.situacao, minuta: p.minuta, atendidoPor: p.atendidoPor, atendidoEm: p.atendidoEm, motivo: p.motivo };
+}
+
+function criarPedido(ss, quem, req) {
+  const d = req.pedido || {};
+  const de = textoLimpo(d.de, 80), para = textoLimpo(d.para, 80);
+  if (!de) throw erroAcesso('pedido', 'Informe quem está enviando.');
+  if (!para) throw erroAcesso('pedido', 'Informe para quem vai o envio.');
+  const qtd = Math.floor(Number(d.qtd));
+  if (!(qtd >= 1 && qtd <= 999)) throw erroAcesso('pedido', 'A quantidade deve ser de 1 a 999.');
+  const dados = lerPedidos(ss);
+  const usuario = quem.usuario || 'codigo';
+  const abertos = dados.lista.filter(function (p) { return p.usuario === usuario && p.situacao === SIT_AGUARDANDO; }).length;
+  if (abertos >= MAX_PEDIDOS_ABERTOS) throw erroAcesso('limite', 'Você já tem ' + abertos + ' pedidos aguardando. Espere alguns serem incluídos antes de lançar outros.');
+  const p = gravarPedido(dados.aba, {
+    id: 'P' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1296).toString(36).toUpperCase(),
+    criadoEm: agoraTexto(ss), usuario: usuario, nome: quem.nome || usuario, de: de, para: para, qtd: qtd,
+    conteudo: textoLimpo(d.conteudo, 30) || 'Envelope', obs: textoLimpo(d.obs, 200), situacao: SIT_AGUARDANDO
+  });
+  return { ok: true, pedido: pedidoPublico(p) };
+}
+
+// Quem monta minutas vê todos os pedidos aguardando e os atendidos recentemente;
+// quem só pede vê os próprios.
+function listarPedidos(ss, quem) {
+  const atende = podeAtenderPedidos(quem);
+  const meus = quem.permissoes.indexOf('pedidos.criar') >= 0;
+  if (!atende && !meus) throw erroAcesso('permissao', 'Seu usuário não tem permissão para ver pedidos de envio.');
+  const lista = lerPedidos(ss).lista;
+  const usuario = quem.usuario || 'codigo';
+  const aguardando = lista.filter(function (p) { return p.situacao === SIT_AGUARDANDO && (atende || p.usuario === usuario); });
+  const outros = lista.filter(function (p) { return p.situacao !== SIT_AGUARDANDO && (atende || p.usuario === usuario); }).reverse().slice(0, atende ? 40 : 60);
+  return { ok: true, podeAtender: atende, pedidos: aguardando.concat(outros).map(pedidoPublico) };
+}
+
+function cancelarPedido(ss, quem, req) {
+  const dados = lerPedidos(ss);
+  const p = dados.lista.filter(function (x) { return x.id === String(req.id || ''); })[0];
+  if (!p) throw erroAcesso('pedido', 'Pedido não encontrado.');
+  if (p.situacao !== SIT_AGUARDANDO) throw erroAcesso('pedido', 'Este pedido não está mais aguardando (' + p.situacao.toLowerCase() + ').');
+  const meu = p.usuario === (quem.usuario || 'codigo');
+  if (!meu && !podeAtenderPedidos(quem)) throw erroAcesso('permissao', 'Você só pode cancelar os seus próprios pedidos.');
+  p.situacao = meu ? SIT_CANCELADO : SIT_RECUSADO;
+  p.atendidoPor = quem.nome || quem.usuario || '';
+  p.atendidoEm = agoraTexto(ss);
+  p.motivo = meu ? '' : textoLimpo(req.motivo, 200);
+  gravarPedido(dados.aba, p);
+  return { ok: true, pedido: pedidoPublico(p) };
+}
+
+// Chamado ao registrar uma minuta: itens que vieram de um pedido marcam o pedido como incluído.
+function marcarPedidosIncluidos(ss, itens, numeroTexto, quem) {
+  const ids = itens.map(function (i) { return String(i.pedidoId || ''); }).filter(String);
+  if (!ids.length) return 0;
+  const dados = lerPedidos(ss);
+  let n = 0;
+  dados.lista.forEach(function (p) {
+    if (ids.indexOf(p.id) < 0) return;
+    if (p.situacao !== SIT_AGUARDANDO && !(p.situacao === SIT_INCLUIDO && normalizarNumero(p.minuta) === normalizarNumero(numeroTexto))) return;
+    p.situacao = SIT_INCLUIDO; p.minuta = numeroTexto; p.atendidoPor = quem.nome || quem.usuario || ''; p.atendidoEm = agoraTexto(ss); p.motivo = '';
+    gravarPedido(dados.aba, p); n++;
+  });
+  return n;
+}
+
+// Chamado ao excluir uma minuta: os pedidos dela voltam a aguardar.
+function devolverPedidos(ss, num) {
+  const dados = lerPedidos(ss);
+  dados.lista.forEach(function (p) {
+    if (p.situacao !== SIT_INCLUIDO || normalizarNumero(p.minuta) !== num) return;
+    p.situacao = SIT_AGUARDANDO; p.minuta = ''; p.atendidoPor = ''; p.atendidoEm = '';
+    gravarPedido(dados.aba, p);
+  });
 }

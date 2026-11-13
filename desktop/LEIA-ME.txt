@@ -1,4 +1,4 @@
-GERADOR DE MINUTAS - Grupo Quatro K  (v2.4.0)
+GERADOR DE MINUTAS - Grupo Quatro K  (v2.6.0)
 =============================================
 
 PACOTE PORTÁTIL PARA WINDOWS - SOMENTE O GERADOR DE MINUTAS
@@ -65,3 +65,11 @@ NOVIDADES DA v2.4
   "USUÁRIOS E LOGIN" no topo dele) e abra o Gerador: a tela "Primeiro acesso"
   cria o administrador usando o código de acesso do script.
 - Sem Google Sheets configurado (só planilha local), o Gerador abre sem login.
+
+NOVIDADES DA v2.6
+- Pedidos de envio: quem tem o perfil Consulta pede um envio (de quem, para
+  quem, quantidade, conteúdo e observação). Quem monta as minutas é avisado
+  e inclui o pedido no malote com um clique; ao gerar o PDF ou registrar, o
+  pedido fica marcado com o número da minuta.
+- Histórico: clique numa minuta para ver tudo o que foi enviado.
+- Requer o GoogleSheets_Script.gs versão 2.6 publicado no Apps Script.
