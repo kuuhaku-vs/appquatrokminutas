@@ -24,7 +24,7 @@ O app abre numa tela de login. Cada pessoa entra com o próprio usuário e senha
 **Ativar (uma vez):**
 1. Publique a versão nova do `GoogleSheets_Script.gs` (veja *Atualizar* abaixo), com um `CODIGO_ACESSO` só seu.
 2. Abra o app. A tela **Primeiro acesso** pede o código de acesso e cria o **administrador**.
-3. No menu **Usuários**, o administrador cria as outras pessoas.
+3. No menu **Usuários**, o administrador cria as outras pessoas ou aprova quem pediu cadastro pela tela de login.
 
 Enquanto o script antigo estiver publicado, ou enquanto nenhum usuário existir, tudo funciona como antes.
 
@@ -37,6 +37,8 @@ Enquanto o script antigo estiver publicado, ou enquanto nenhum usuário existir,
 
 Permissões: *Histórico*, *Frete cortesia*, *Configurações* (acessar) e *Criar minutas*, *Alterar minutas*, *Excluir minutas*, *Alterar cadastros*, *Gerenciar usuários* (alterar).
 
+- **Cadastro pela tela de login:** em *Não tem usuário? Peça seu cadastro* a pessoa informa nome, usuário e senha. O pedido fica **pendente** (aparece no topo de *Usuários*, com um contador no menu) e ela só entra depois que o administrador aprovar e escolher o perfil. Para desligar, mude `PERMITIR_CADASTRO` para `false` no script.
+- **Vínculo com o Google Sheets:** a URL do script (e, no Windows, as demais opções do Google) fica no fim da tela *Usuários*, visível só para quem gerencia usuários. Num aparelho ainda sem vínculo o app abre sem login, só para o vínculo ser feito ali.
 - Quem confere a sessão e a permissão é o script do Google, em cada pedido. A tela só esconde o que não está liberado.
 - Os usuários ficam na aba **Usuarios** da planilha. A senha é guardada protegida (hash com sal); não edite as colunas *Senha (protegida)* e *Sessão*.
 - A coluna **Usuário** da aba *Minutas* mostra quem gravou cada minuta por último.

@@ -41,6 +41,9 @@
  *   • Depois disso todo mundo entra com usuário e senha. O administrador
  *     cria os demais em Usuários, dentro do Gerador, e marca o que cada
  *     um pode acessar e alterar. Quem valida as permissões é este script.
+ *   • CADASTRO PELA TELA DE LOGIN: a pessoa preenche nome, usuário e senha
+ *     e fica como PENDENTE. Ela só entra depois que o administrador aprovar
+ *     e escolher o perfil. Para desligar, mude PERMITIR_CADASTRO para false.
  *   • Enquanto nenhum usuário existir, tudo funciona como antes
  *     (só com o código de acesso).
  *   • ESQUECI A SENHA DO ADMINISTRADOR: apague as linhas da aba
@@ -54,7 +57,7 @@ const NOME_PASTA_PDF = 'Minutas Quatro K - PDFs'; // criada ao lado desta planil
 const ABA_MINUTAS = 'Minutas';
 const ABA_ITENS = 'Itens';
 const ABA_USUARIOS = 'Usuarios';
-const VERSAO_SCRIPT = '2.4';
+const VERSAO_SCRIPT = '2.5';
 const CAB_MINUTAS = ['Minuta', 'Data', 'Volumes', 'Embalagem', 'Remetente', 'Destinatário', 'Qtd. itens', 'Pessoas', 'PDF', 'Atualizado em', 'Origem', 'Dados', 'Usuário'];
 const CAB_USUARIOS = ['Usuário', 'Nome', 'Perfil', 'Permissões', 'Ativo', 'Senha (protegida)', 'Sessão', 'Criado em', 'Último acesso'];
 
@@ -70,6 +73,8 @@ const SESSAO_HORAS = 12;          // sessão normal
 const SESSAO_DIAS_LEMBRAR = 30;   // com "Manter conectado"
 const SENHA_MINIMO = 6;
 const SENHA_ITERACOES = 1000;     // PBKDF2-HMAC-SHA256 (o Apps Script é lento; não aumente demais)
+const PERMITIR_CADASTRO = true;   // true: a tela de login deixa a pessoa pedir um cadastro (o administrador aprova)
+const MAX_PENDENTES = 30;         // cadastros aguardando aprovação ao mesmo tempo
 const MAX_TENTATIVAS = 5;         // depois disso o login espera 5 minutos
 const CAB_ITENS = ['Minuta', 'Data', 'Item', 'Rem. / Setor', 'Dest. / Setor', 'Qtd.', 'Conteúdo', 'Obs.'];
 
@@ -83,7 +88,8 @@ function doPost(e) {
     const usuarios = lerUsuarios(abaU);
 
     // Ações de login (não exigem sessão).
-    if (req.acao === 'auth.estado') return resposta({ ok: true, temUsuarios: usuarios.length > 0 });
+    if (req.acao === 'auth.estado') return resposta({ ok: true, temUsuarios: usuarios.length > 0, cadastro: PERMITIR_CADASTRO });
+    if (req.acao === 'auth.cadastrar') return resposta(pedirCadastro(ss, abaU, usuarios, req));
     if (req.acao === 'auth.primeiro') return resposta(primeiroAcesso(ss, abaU, usuarios, req));
     if (req.acao === 'auth.login') return resposta(entrar(ss, abaU, usuarios, req));
 
@@ -327,9 +333,10 @@ function lerUsuarios(abaU) {
     const usuario = normalizarUsuario(r[0]);
     if (!usuario) return null;
     const perfil = PERFIS.hasOwnProperty(String(r[2])) ? String(r[2]) : 'personalizado';
+    const situacao = String(r[4]).trim().toUpperCase();
     return {
       linha: i + 2, usuario: usuario, nome: String(r[1] || ''), perfil: perfil, permissoes: permissoesEfetivas(perfil, r[3]),
-      ativo: String(r[4]).toUpperCase() !== 'NÃO', hash: String(r[5] || ''), sv: Number(r[6]) || 1,
+      ativo: situacao === 'SIM' || situacao === '', pendente: situacao === 'PENDENTE', hash: String(r[5] || ''), sv: Number(r[6]) || 1,
       criadoEm: textoCelula(r[7], ss, 'dd/MM/yyyy HH:mm:ss'), ultimoAcesso: textoCelula(r[8], ss, 'dd/MM/yyyy HH:mm:ss')
     };
   }).filter(function (x) { return x; });
@@ -338,7 +345,7 @@ function lerUsuarios(abaU) {
 function gravarUsuario(abaU, u) {
   const linha = u.linha || (abaU.getLastRow() + 1);
   abaU.getRange(linha, 1, 1, CAB_USUARIOS.length).setNumberFormat('@').setValues([[
-    u.usuario, u.nome, u.perfil, u.perfil === 'personalizado' ? u.permissoes.join(', ') : '', u.ativo ? 'SIM' : 'NÃO',
+    u.usuario, u.nome, u.perfil, u.perfil === 'personalizado' ? u.permissoes.join(', ') : '', u.pendente ? 'PENDENTE' : (u.ativo ? 'SIM' : 'NÃO'),
     u.hash, String(u.sv), u.criadoEm || '', u.ultimoAcesso || ''
   ]]);
   u.linha = linha;
@@ -346,7 +353,7 @@ function gravarUsuario(abaU, u) {
 }
 
 function publico(u) {
-  return { usuario: u.usuario, nome: u.nome, perfil: u.perfil, permissoes: u.permissoes, ativo: u.ativo !== false, criadoEm: u.criadoEm || '', ultimoAcesso: u.ultimoAcesso || '', legado: !!u.legado };
+  return { usuario: u.usuario, nome: u.nome, perfil: u.perfil, permissoes: u.permissoes, ativo: u.ativo !== false, pendente: !!u.pendente, criadoEm: u.criadoEm || '', ultimoAcesso: u.ultimoAcesso || '', legado: !!u.legado };
 }
 
 function exigir(quem, permissao) {
@@ -465,11 +472,29 @@ function entrar(ss, abaU, usuarios, req) {
   exigirTentativa(chave);
   const u = usuarios.filter(function (x) { return x.usuario === nome; })[0];
   if (!u || !conferirSenha(String(req.senha || ''), u.hash)) { contarFalha(chave); throw erroAcesso('credenciais', 'Usuário ou senha incorretos.'); }
+  if (u.pendente) throw erroAcesso('pendente', 'Seu cadastro ainda aguarda a aprovação do administrador.');
   if (!u.ativo) throw erroAcesso('inativo', 'Este usuário está desativado. Fale com o administrador.');
   limparFalhas(chave);
   u.ultimoAcesso = agoraTexto(ss);
   abaU.getRange(u.linha, 9).setNumberFormat('@').setValue(u.ultimoAcesso);
   return { ok: true, usuario: publico(u), sessao: criarSessao(u, !!req.lembrar) };
+}
+
+// Cadastro feito pela própria pessoa na tela de login: fica PENDENTE até o administrador aprovar.
+function pedirCadastro(ss, abaU, usuarios, req) {
+  if (!usuarios.length) throw erroAcesso('primeiro', 'Nenhum usuário cadastrado ainda. Faça o primeiro acesso.');
+  if (!PERMITIR_CADASTRO) throw erroAcesso('fechado', 'O cadastro pela tela de login está desligado. Peça um usuário ao administrador.');
+  if (tentativas('cadastros') >= 10) throw erroAcesso('bloqueado', 'Muitos cadastros em pouco tempo. Tente de novo em alguns minutos.');
+  if (usuarios.filter(function (x) { return x.pendente; }).length >= MAX_PENDENTES) throw erroAcesso('cheio', 'Há muitos cadastros aguardando aprovação. Fale com o administrador.');
+  const nome = validarNomeUsuario(req.usuario);
+  if (usuarios.some(function (x) { return x.usuario === nome; })) throw erroAcesso('existe', 'Já existe um usuário "' + nome + '". Escolha outro.');
+  const senha = validarSenhaNova(req.senha);
+  contarFalha('cadastros');
+  gravarUsuario(abaU, {
+    usuario: nome, nome: String(req.nome || '').trim().slice(0, 60) || nome, perfil: 'consulta', permissoes: permissoesEfetivas('consulta'),
+    ativo: false, pendente: true, hash: protegerSenha(senha), sv: 1, criadoEm: agoraTexto(ss), ultimoAcesso: ''
+  });
+  return { ok: true, pendente: true };
 }
 
 function trocarSenha(abaU, quem, req) {
@@ -503,6 +528,7 @@ function salvarUsuario(ss, abaU, usuarios, quem, req) {
   u.perfil = PERFIS.hasOwnProperty(String(d.perfil)) ? String(d.perfil) : (u.perfil || 'consulta');
   u.permissoes = permissoesEfetivas(u.perfil, d.permissoes || []);
   u.ativo = d.ativo !== false;
+  if (u.ativo) u.pendente = false; // aprovar um cadastro pendente é salvar como ativo
   if (u.usuario === quem.usuario && !u.ativo) throw erroAcesso('proprio', 'Você não pode desativar o seu próprio usuário.');
   if (!adminsAtivos(usuarios)) throw erroAcesso('admin', 'Precisa existir pelo menos um administrador ativo.');
   if (d.senha) { u.hash = protegerSenha(validarSenhaNova(d.senha)); if (!req.novo) u.sv += 1; }

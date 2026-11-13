@@ -38,7 +38,7 @@
   const TELAS = { nova: ['minutas.criar', 'minutas.editar'], historico: ['historico.ver'], frete: ['frete.usar'], config: ['config.acessar'], usuarios: ['usuarios.gerenciar'] };
 
   // ---------- estado e sessão guardada ----------
-  const S = { usuario: null, token: '', expira: 0, lembrar: false, legado: false, appCarregado: false, logado: false };
+  const S = { usuario: null, token: '', expira: 0, lembrar: false, legado: false, appCarregado: false, logado: false, cadastroAberto: true };
   function lerGuardado() {
     for (const st of [sessionStorage, localStorage]) {
       try { const v = JSON.parse(st.getItem(K_SESSAO) || 'null'); if (v && v.token) return v; } catch {}
@@ -61,7 +61,7 @@
   const semRede = (r) => !!r && !r.ok && !r.versao && !r.codigo;
 
   const pode = (p) => S.legado || !!S.usuario?.permissoes?.includes(p);
-  const podeTela = (v) => v === 'semacesso' || (S.legado ? v !== 'usuarios' : (TELAS[v] || []).some(pode));
+  const podeTela = (v) => v === 'semacesso' || S.legado || (TELAS[v] || []).some(pode);
   const primeiraTela = () => Object.keys(TELAS).find(podeTela) || 'semacesso';
   const iniciais = (nome) => String(nome || '?').trim().split(/\s+/).slice(0, 2).map((x) => x[0] || '').join('').toUpperCase() || '?';
   const nomePerfil = (p) => (PERFIS[p] || PERFIS.personalizado).nome;
@@ -128,17 +128,18 @@
       <h1 id="lgTitulo">Entrar</h1>
       <p class="lg-sub" id="lgSub"></p>
       <label class="field" data-only="primeiro"><span>Código de acesso (o do script do Google)</span><input id="lgCodigo" type="password" autocomplete="off" /></label>
-      <label class="field" data-only="primeiro"><span>Seu nome</span><input id="lgNome" autocomplete="name" maxlength="60" placeholder="Como aparece nas minutas" /></label>
+      <label class="field" data-only="novo"><span>Seu nome</span><input id="lgNome" autocomplete="name" maxlength="60" placeholder="Como aparece nas minutas" /></label>
       <label class="field"><span>Usuário</span><input id="lgUsuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" /></label>
       <div class="field"><span>Senha</span>
         <div class="lg-pass"><input id="lgSenha" type="password" autocomplete="current-password" maxlength="100" aria-label="Senha" />
           <button class="lg-eye" id="lgOlho" type="button" aria-pressed="false" title="Mostrar a senha">${ico('eye')}</button></div>
         <span class="lg-caps" id="lgCaps" hidden>Caps Lock está ligado</span>
       </div>
-      <label class="field" data-only="primeiro"><span>Repita a senha</span><input id="lgSenha2" type="password" autocomplete="new-password" maxlength="100" /></label>
+      <label class="field" data-only="novo"><span>Repita a senha</span><input id="lgSenha2" type="password" autocomplete="new-password" maxlength="100" /></label>
       <label class="lg-keep"><input type="checkbox" id="lgLembrar" /> Manter conectado neste aparelho</label>
       <button class="primary lg-go" id="lgEntrar" type="submit">Entrar</button>
       <p class="lg-msg" id="lgMsg" role="alert"></p>
+      <button class="lg-link" id="lgTrocar" type="button">Não tem usuário? Peça seu cadastro</button>
     </form>
   </div>
 </div>
@@ -188,7 +189,8 @@
         <div class="vh-title"><div><span class="eyebrow">Sistema</span><h2>Usuários</h2></div></div>
         <div class="vh-actions"><button class="primary" id="btnNovoUsuario" type="button" data-ico="plus"><span>Novo usuário</span></button></div>
       </header>
-      <section class="card">
+      <div class="note" id="usSemLogin" data-ico="info" hidden><span>O login de usuários ainda não está ativo neste aparelho. Vincule abaixo o script do Google (versão 2.4 ou mais nova) e abra o Gerador de novo para criar o administrador.</span></div>
+      <section class="card" id="usCardLista">
         <div class="card-h"><h3 data-ico="users">Quem pode entrar <span class="section-counter" id="usContador"></span></h3></div>
         <p class="hint">Cada pessoa entra com o próprio usuário e senha. O perfil define o que ela pode acessar e alterar.</p>
         <div class="us-list" id="usLista"></div>
@@ -197,10 +199,19 @@
     <section id="v-semacesso" class="view">
       <section class="card"><div class="us-empty"><p><b>Seu usuário ainda não tem nenhuma tela liberada.</b></p><p>Peça ao administrador para definir suas permissões.</p></div></section>
     </section>`);
-  document.querySelector('.sb-nav [data-go="config"]')?.insertAdjacentHTML('afterend', '<button class="nav" data-go="usuarios" data-ico="users"><span>Usuários</span></button>');
+  document.querySelector('.sb-nav [data-go="config"]')?.insertAdjacentHTML('afterend', '<button class="nav" data-go="usuarios" data-ico="users"><span>Usuários</span><b class="nav-badge" id="usBadge" hidden></b></button>');
   document.querySelector('.sb-foot')?.insertAdjacentHTML('afterbegin', '<button class="sb-user" id="sbUser" type="button" title="Minha conta" hidden></button>');
   document.querySelector('.m-top')?.insertAdjacentHTML('beforeend', '<button class="m-top-btn m-user" id="mTopUser" type="button" title="Minha conta" hidden></button>');
   document.querySelector('#cfgSheetsToken')?.closest('label')?.classList.add('campo-codigo');
+  // O vínculo com o script do Google fica na tela de Usuários (só o administrador mexe).
+  const cardSheets = $('cardSheets');
+  if (cardSheets) {
+    $('v-usuarios').appendChild(cardSheets);
+    cardSheets.classList.remove('span-all'); cardSheets.classList.add('us-vinculo');
+    const h = cardSheets.querySelector('.card-h h3'); if (h) h.lastChild.textContent = 'Vínculo com o Google Sheets';
+    $('btnSheetsTestar')?.insertAdjacentHTML('beforebegin', '<button class="primary" id="btnSheetsSalvar" type="button" data-ico="save"><span>Salvar vínculo</span></button>');
+    $('btnSheetsSalvar')?.addEventListener('click', () => $('salvarCfg')?.click());
+  }
   window.hidratarIcones?.();
 
   // =========================================================
@@ -214,21 +225,25 @@
 
   function mostrarLogin(modo, aviso) {
     lg.dataset.modo = modo;
-    const primeiro = modo === 'primeiro';
-    $('lgTitulo').textContent = primeiro ? 'Primeiro acesso' : saudacao() + '!';
+    const primeiro = modo === 'primeiro', cadastro = modo === 'cadastro';
+    $('lgTitulo').textContent = primeiro ? 'Primeiro acesso' : cadastro ? 'Pedir cadastro' : saudacao() + '!';
     $('lgSub').textContent = primeiro
       ? 'Crie o usuário administrador. Ele cadastra as outras pessoas e define o que cada uma pode fazer.'
+      : cadastro ? 'Escolha seu usuário e sua senha. Você entra assim que o administrador aprovar o cadastro.'
       : 'Entre com seu usuário para abrir o Gerador de Minutas.';
-    $('lgEntrar').textContent = primeiro ? 'Criar administrador e entrar' : 'Entrar';
-    $('lgSenha').autocomplete = primeiro ? 'new-password' : 'current-password';
-    legenda(primeiro ? 'O malote espera o primeiro administrador.' : 'Escreva seu usuário: ele vai no A/C do malote.');
+    $('lgEntrar').textContent = primeiro ? 'Criar administrador e entrar' : cadastro ? 'Enviar cadastro' : 'Entrar';
+    $('lgSenha').autocomplete = primeiro || cadastro ? 'new-password' : 'current-password';
+    $('lgTrocar').textContent = cadastro ? 'Já tenho usuário: entrar' : 'Não tem usuário? Peça seu cadastro';
+    $('lgTrocar').hidden = primeiro || (!cadastro && !S.cadastroAberto);
+    legenda(primeiro ? 'O malote espera o primeiro administrador.' : cadastro ? 'Seu cadastro segue para o administrador aprovar.' : 'Escreva seu usuário: ele vai no A/C do malote.');
     mensagem(aviso || '', true);
     lg.classList.remove('is-ok', 'is-go', 'is-error', 'is-busy');
     $('lgEntrar').disabled = false;
     lg.hidden = false;
     splash?.classList.add('is-hidden');
-    setTimeout(() => (primeiro ? $('lgCodigo') : ($('lgUsuario').value ? $('lgSenha') : $('lgUsuario'))).focus(), 80);
+    setTimeout(() => (primeiro ? $('lgCodigo') : cadastro ? $('lgNome') : ($('lgUsuario').value ? $('lgSenha') : $('lgUsuario'))).focus(), 80);
   }
+  $('lgTrocar').addEventListener('click', () => { if (!lg.classList.contains('is-busy')) mostrarLogin(lg.dataset.modo === 'cadastro' ? 'login' : 'cadastro'); });
 
   // O malote reage: A/C recebe o usuário, a aba fecha na senha, o lacre pulsa a cada tecla.
   const campoUsuario = $('lgUsuario'), campoSenha = $('lgSenha');
@@ -291,20 +306,28 @@
   $('lgForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (lg.classList.contains('is-busy') || lg.classList.contains('is-ok')) return;
-    const primeiro = lg.dataset.modo === 'primeiro';
+    const primeiro = lg.dataset.modo === 'primeiro', cadastro = lg.dataset.modo === 'cadastro';
     const usuario = campoUsuario.value.trim(), senha = campoSenha.value, lembrar = $('lgLembrar').checked;
+    if (cadastro && !$('lgNome').value.trim()) return erroLogin('Digite o seu nome.', $('lgNome'));
     if (primeiro && !$('lgCodigo').value) return erroLogin('Digite o código de acesso definido no script do Google.', $('lgCodigo'));
     if (!usuario) return erroLogin('Digite o seu usuário.', campoUsuario);
     if (!senha) return erroLogin('Digite a sua senha.');
-    if (primeiro && senha.length < 6) return erroLogin('A senha precisa ter pelo menos 6 caracteres.');
-    if (primeiro && senha !== $('lgSenha2').value) return erroLogin('As duas senhas não são iguais.', $('lgSenha2'));
+    if ((primeiro || cadastro) && senha.length < 6) return erroLogin('A senha precisa ter pelo menos 6 caracteres.');
+    if ((primeiro || cadastro) && senha !== $('lgSenha2').value) return erroLogin('As duas senhas não são iguais.', $('lgSenha2'));
 
     mensagem(''); $('lgEntrar').disabled = true;
     lg.classList.add('is-busy', 'is-pass'); lg.classList.remove('is-peek');
     legenda('Conferindo com a planilha…');
     const r = primeiro
       ? await api.auth('auth.primeiro', { codigo: $('lgCodigo').value, usuario, nome: $('lgNome').value.trim(), senha, lembrar })
+      : cadastro ? await api.auth('auth.cadastrar', { usuario, nome: $('lgNome').value.trim(), senha })
       : await api.auth('auth.login', { usuario, senha, lembrar });
+
+    if (cadastro && r?.ok) {
+      campoSenha.value = ''; $('lgSenha2').value = ''; $('lgNome').value = '';
+      mostrarLogin('login', 'Cadastro enviado. Você poderá entrar assim que o administrador aprovar.');
+      return legenda('Cadastro enviado para aprovação.');
+    }
 
     if (r?.ok && r.sessao) {
       await definirSessao(r.sessao, r.usuario, lembrar);
@@ -317,9 +340,10 @@
     }
     if (antigo(r)) return entrarSemLogin(r.codigo === 'semurl' ? '' : 'antigo');
     if (r?.codigo === 'primeiro') { lg.classList.remove('is-busy'); return mostrarLogin('primeiro', 'Ainda não existe nenhum usuário. Crie o administrador.'); }
+    if (r?.codigo === 'fechado') { S.cadastroAberto = false; lg.classList.remove('is-busy'); return mostrarLogin('login', r.error); }
     if (r?.codigo === 'existe' && primeiro) { lg.classList.remove('is-busy'); return mostrarLogin('login', 'O administrador já foi criado. Entre com usuário e senha.'); }
     erroLogin(semRede(r) ? 'Sem conexão com o Google. Confira a internet e tente de novo.' : (r?.error || 'Não foi possível entrar.'),
-      r?.codigo === 'codigo' ? $('lgCodigo') : r?.codigo === 'usuario' ? campoUsuario : null);
+      r?.codigo === 'codigo' ? $('lgCodigo') : (r?.codigo === 'usuario' || r?.codigo === 'existe') ? campoUsuario : null);
   });
 
   // =========================================================
@@ -341,6 +365,7 @@
     lg.hidden = true;
     carregarApp();
     setTimeout(() => window.verificarPlanilhaUI?.(), 1500);
+    setTimeout(avisarPendentes, 5000);
   }
   // Script do Google antigo (ou programa do Windows sem Google): funciona como antes, sem login.
   function entrarSemLogin(motivo) {
@@ -416,13 +441,23 @@
   let usuarios = [], editando = null;
   async function renderUsuarios() {
     const box = $('usLista');
+    try { await window.renderCfg?.(); } catch {} // preenche os campos do vínculo com o Google
+    $('usSemLogin').hidden = !S.legado; $('usCardLista').hidden = S.legado; $('btnNovoUsuario').hidden = S.legado;
+    if (S.legado) return;
     if (!usuarios.length) box.innerHTML = '<div class="us-empty">Carregando usuários…</div>';
     const r = await api.auth('usuarios.listar');
     if (!r?.ok) { box.innerHTML = `<div class="us-empty">${esc(r?.error || 'Não foi possível carregar os usuários.')}</div>`; return; }
-    usuarios = r.usuarios || [];
+    usuarios = (r.usuarios || []).slice().sort((a, b) => (b.pendente ? 1 : 0) - (a.pendente ? 1 : 0));
+    marcarPendentes(usuarios.filter((u) => u.pendente).length);
     $('usContador').textContent = usuarios.length + (usuarios.length === 1 ? ' usuário' : ' usuários');
     box.innerHTML = usuarios.map((u) => {
       const eu = u.usuario === S.usuario?.usuario;
+      if (u.pendente) return `<div class="us-row pend">
+        <div class="us-who"><span class="avatar">${esc(iniciais(u.nome))}</span><div><strong>${esc(u.nome)}</strong><small>@${esc(u.usuario)}</small></div></div>
+        <div><span class="perm-chip wait">Aguardando aprovação</span></div>
+        <div class="us-last">Pediu o cadastro pela tela de login <b>${esc(u.criadoEm || '')}</b></div><div></div>
+        <div class="us-actions act"><button type="button" class="ok" data-us-editar="${esc(u.usuario)}" title="Aprovar e escolher o perfil">${ico('check')}<span>Aprovar</span></button><button type="button" class="del" data-us-excluir="${esc(u.usuario)}" title="Recusar o cadastro">${ico('trash')}</button></div>
+      </div>`;
       return `<div class="us-row${u.ativo ? '' : ' off'}">
         <div class="us-who"><span class="avatar">${esc(iniciais(u.nome))}</span><div><strong>${esc(u.nome)}${eu ? ' (você)' : ''}</strong><small>@${esc(u.usuario)}${u.ativo ? '' : ' · desativado'}</small></div></div>
         <div><span class="perm-chip${u.perfil === 'admin' ? ' all' : ''}">${esc(nomePerfil(u.perfil))}</span></div>
@@ -432,16 +467,25 @@
       </div>`;
     }).join('') || '<div class="us-empty">Nenhum usuário.</div>';
   }
+  function marcarPendentes(n) { const b = $('usBadge'); if (b) { b.hidden = !n; b.textContent = n ? String(n) : ''; } }
+  async function avisarPendentes() {
+    if (S.legado || !pode('usuarios.gerenciar')) return;
+    const r = await api.auth('usuarios.listar'); if (!r?.ok) return;
+    const n = (r.usuarios || []).filter((u) => u.pendente).length; marcarPendentes(n);
+    if (n) window.toast?.(n === 1 ? 'Há 1 cadastro aguardando sua aprovação em Usuários.' : `Há ${n} cadastros aguardando sua aprovação em Usuários.`);
+  }
   $('usLista').addEventListener('click', async (e) => {
     const ed = e.target.closest('[data-us-editar]'), ex = e.target.closest('[data-us-excluir]');
     if (ed) return abrirUsuario(usuarios.find((u) => u.usuario === ed.dataset.usEditar));
     if (!ex) return;
     const u = usuarios.find((x) => x.usuario === ex.dataset.usExcluir); if (!u) return;
-    const ok = await window.confirmarAcaoCorporativa({ titulo: 'Excluir usuário', mensagem: `Excluir o usuário ${esc(u.nome)} (@${esc(u.usuario)})?`, detalhe: 'Ele deixa de conseguir entrar na hora. As minutas que ele registrou continuam na planilha.', confirmacao: 'Excluir usuário', tipo: 'danger' });
+    const ok = await window.confirmarAcaoCorporativa(u.pendente
+      ? { titulo: 'Recusar cadastro', mensagem: `Recusar o cadastro de ${esc(u.nome)} (@${esc(u.usuario)})?`, detalhe: 'O pedido é apagado. A pessoa pode pedir de novo.', confirmacao: 'Recusar cadastro', tipo: 'danger' }
+      : { titulo: 'Excluir usuário', mensagem: `Excluir o usuário ${esc(u.nome)} (@${esc(u.usuario)})?`, detalhe: 'Ele deixa de conseguir entrar na hora. As minutas que ele registrou continuam na planilha.', confirmacao: 'Excluir usuário', tipo: 'danger' });
     if (!ok) return;
     const r = await api.auth('usuarios.excluir', { usuario: u.usuario });
     if (!r?.ok) return window.toast(r?.error || 'Não foi possível excluir o usuário.', true);
-    window.toast('Usuário excluído.'); renderUsuarios();
+    window.toast(u.pendente ? 'Cadastro recusado.' : 'Usuário excluído.'); renderUsuarios();
   });
 
   // Editor
@@ -468,13 +512,14 @@
   });
   function abrirUsuario(u) {
     editando = u || null;
-    $('usTitulo').textContent = u ? 'Alterar usuário' : 'Novo usuário';
+    $('usTitulo').textContent = u?.pendente ? 'Aprovar cadastro' : u ? 'Alterar usuário' : 'Novo usuário';
+    $('usSalvar').textContent = u?.pendente ? 'Aprovar e salvar' : 'Salvar usuário';
     $('usUsuario').value = u?.usuario || ''; $('usUsuario').readOnly = !!u;
     $('usNome').value = u?.nome || ''; $('usSenha').value = '';
     $('usSenhaRotulo').innerHTML = u ? 'Nova senha <i>(em branco mantém a atual)</i>' : 'Senha <i>(mínimo 6 caracteres)</i>';
-    $('usAtivo').checked = u ? u.ativo : true;
+    $('usAtivo').checked = u ? (u.ativo || u.pendente) : true;
     $('usAtivo').disabled = !!u && u.usuario === S.usuario?.usuario;
-    const perfil = u?.perfil || 'operador';
+    const perfil = u?.pendente ? 'operador' : (u?.perfil || 'operador');
     document.querySelectorAll('input[name="usPerfil"]').forEach((r) => (r.checked = r.value === perfil));
     marcar(u?.permissoes || []);
     atualizarPerfil();
@@ -494,7 +539,7 @@
     b.disabled = false;
     if (!r?.ok) return window.toast(r?.error || 'Não foi possível salvar o usuário.', true);
     window.fecharModal($('mUsuario'));
-    window.toast(editando ? 'Usuário alterado.' : 'Usuário criado. Passe o usuário e a senha para a pessoa.');
+    window.toast(editando?.pendente && dados.ativo ? 'Cadastro aprovado. A pessoa já pode entrar.' : editando ? 'Usuário alterado.' : 'Usuário criado. Passe o usuário e a senha para a pessoa.');
     if (r.usuario?.usuario === S.usuario?.usuario) conferirSessao(true);
     renderUsuarios();
   });
@@ -521,6 +566,7 @@
     }
     const r = await api.auth('auth.estado');
     if (antigo(r)) return entrarSemLogin(r.codigo === 'semurl' ? '' : 'antigo');
+    if (r?.ok && r.cadastro === false) S.cadastroAberto = false;
     if (r?.ok && !r.temUsuarios) return mostrarLogin('primeiro');
     mostrarLogin('login', semRede(r) ? 'Sem conexão com o Google no momento. Confira a internet.' : '');
   })();
