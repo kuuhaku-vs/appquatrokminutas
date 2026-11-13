@@ -12,7 +12,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" /><meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Minutas 4K" /><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <script>try{if(localStorage.getItem('gm-tema')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
-<link rel="stylesheet" href="style.css?v=20261109-1620" />
+<link rel="stylesheet" href="style.css?v=20261113-1300" />
+<link rel="stylesheet" href="auth.css?v=20261113-1300" />
 </head>
 <body>
 
@@ -23,7 +24,7 @@
     <div class="splash-title">Gerador de Minutas</div>
     <div class="splash-subtitle">Expedição · Grupo Quatro K</div>
     <div class="splash-progress"><span></span></div>
-    <div class="splash-status" id="splashStatus">Inicializando sistema</div>
+    <div class="splash-status" id="splashStatus">Verificando acesso</div>
   </div>
 </div>
 
@@ -61,7 +62,7 @@
         <button class="sb-tool" id="btnAtalhos" title="Atalhos de teclado (F1)" data-ico="keyboard"><span>Atalhos</span></button>
         <button class="sb-tool sb-tool-icon" id="btnTema" title="Alternar tema"></button>
       </div>
-      <div class="sb-version">v2.3 · Grupo Quatro K</div>
+      <div class="sb-version">v2.4 · Grupo Quatro K</div>
     </div>
   </aside>
 
@@ -294,7 +295,7 @@
             </div>
             <div class="chips-check" id="wrapCopiaCsv"><label><input type="checkbox" id="cfgCopiaCsv" checked /><span>Manter também uma cópia no registro_itens.csv (quando a pasta estiver acessível)</span></label></div>
           </div>
-          <div class="note web-only" data-ico="info"><span>No celular ou navegador, a planilha do Google é a base de dados. Digite o <b>código de acesso</b> uma vez neste aparelho, toque em <b>Testar conexão</b> e depois em <b>Salvar</b>. O PDF é gerado pela opção <b>Salvar como PDF</b> da impressão.</span></div>
+          <div class="note web-only" data-ico="info"><span>No celular ou navegador, a planilha do Google é a base de dados e o acesso é pelo seu <b>usuário e senha</b>. O PDF é gerado pela opção <b>Salvar como PDF</b> da impressão.</span></div>
           <div class="sheets-status" id="sheetsStatus" data-state="off"><span class="sb-dot"></span><span id="sheetsStatusText">Não configurado</span></div>
           <div class="btn-row">
             <button class="ghost" id="btnSheetsTestar" data-ico="pulse"><span>Testar conexão</span></button>
@@ -492,13 +493,14 @@
 </div></div>
 
 <div id="toast"></div>
-<script src="config.js?v=20261109-1620"></script>
-<script src="web-api.js?v=20261109-1620"></script>
-<script src="ui.js?v=20261109-1620"></script>
-<script src="logo.js?v=20261109-1620"></script>
-<script src="print.js?v=20261109-1620"></script>
-<script src="frete-cortesia.js?v=20261109-1620"></script>
-<script src="app.js?v=20261109-1620"></script>
+<script src="config.js?v=20261113-1300"></script>
+<script src="web-api.js?v=20261113-1300"></script>
+<script src="ui.js?v=20261113-1300"></script>
+<script src="logo.js?v=20261113-1300"></script>
+<script src="print.js?v=20261113-1300"></script>
+<script src="frete-cortesia.js?v=20261113-1300"></script>
+<!-- O app.js é carregado pelo auth.js depois do login. -->
+<script src="auth.js?v=20261113-1300" data-app="app.js?v=20261113-1300"></script>
 <script>if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 </body>
 </html>

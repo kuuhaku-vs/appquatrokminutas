@@ -1,4 +1,4 @@
-GERADOR DE MINUTAS - Grupo Quatro K  (v2.3.0)
+GERADOR DE MINUTAS - Grupo Quatro K  (v2.4.0)
 =============================================
 
 PACOTE PORTÁTIL PARA WINDOWS - SOMENTE O GERADOR DE MINUTAS
@@ -55,3 +55,13 @@ NOVIDADES DA v2.3
   3) Confirme "Enviar minutas existentes" para a numeração continuar de onde parou.
 - Com o Google como base é preciso internet para gerar minutas. Sem internet o Gerador
   avisa e não registra a minuta (para nunca repetir número entre computadores).
+
+NOVIDADES DA v2.4
+- Login de usuários: o Gerador abre numa tela de login e cada pessoa entra com o
+  próprio usuário e senha. O administrador define, em "Usuários", o que cada um
+  pode acessar e alterar (criar, alterar e excluir minutas, histórico, frete
+  cortesia, cadastros, configurações).
+- Para ativar: publique a versão nova do GoogleSheets_Script.gs (instruções
+  "USUÁRIOS E LOGIN" no topo dele) e abra o Gerador: a tela "Primeiro acesso"
+  cria o administrador usando o código de acesso do script.
+- Sem Google Sheets configurado (só planilha local), o Gerador abre sem login.

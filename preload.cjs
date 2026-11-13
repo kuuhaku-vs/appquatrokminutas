@@ -19,5 +19,7 @@ contextBridge.exposeInMainWorld('api', {
   sheetsTestar: (tmp) => ipcRenderer.invoke('sheets:testar', tmp),
   sheetsReenviar: () => ipcRenderer.invoke('sheets:reenviar'),
   sheetsSincronizarTudo: () => ipcRenderer.invoke('sheets:sincronizarTudo'),
+  auth: (acao, dados) => ipcRenderer.invoke('auth:chamar', { acao, dados }),
+  authSessao: (token) => ipcRenderer.invoke('auth:sessao', token),
   onSheetsStatus: (cb) => { const fn = (_e, s) => cb(s); ipcRenderer.on('sheets:status', fn); return () => ipcRenderer.removeListener('sheets:status', fn); },
 });

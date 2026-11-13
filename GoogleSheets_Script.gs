@@ -31,6 +31,21 @@
  *  A partir da versão 2.3 esta planilha também pode ser a BASE DE DADOS
  *  do Gerador (numeração, histórico e exclusões), no lugar do
  *  registro_itens.csv. Ative em Configurações › Google Sheets.
+ *
+ *  USUÁRIOS E LOGIN (versão 2.4):
+ *   • Aba "Usuarios": uma linha por usuário, com perfil e permissões.
+ *     A senha fica protegida (hash com sal); ninguém consegue lê-la.
+ *   • PRIMEIRO ACESSO: depois de publicar esta versão, abra o Gerador.
+ *     A tela de login pede o CODIGO_ACESSO abaixo e cria o administrador.
+ *     Por isso o código precisa ser só seu (não deixe "TROQUE-ESTE-CODIGO").
+ *   • Depois disso todo mundo entra com usuário e senha. O administrador
+ *     cria os demais em Usuários, dentro do Gerador, e marca o que cada
+ *     um pode acessar e alterar. Quem valida as permissões é este script.
+ *   • Enquanto nenhum usuário existir, tudo funciona como antes
+ *     (só com o código de acesso).
+ *   • ESQUECI A SENHA DO ADMINISTRADOR: apague as linhas da aba
+ *     "Usuarios" (deixe a linha 1) e refaça o primeiro acesso.
+ *   • Não edite à mão as colunas "Senha (protegida)" e "Sessão".
  * ============================================================
  */
 
@@ -38,8 +53,24 @@ const CODIGO_ACESSO = 'TROQUE-ESTE-CODIGO';      // o mesmo código informado no
 const NOME_PASTA_PDF = 'Minutas Quatro K - PDFs'; // criada ao lado desta planilha
 const ABA_MINUTAS = 'Minutas';
 const ABA_ITENS = 'Itens';
-const VERSAO_SCRIPT = '2.3';
-const CAB_MINUTAS = ['Minuta', 'Data', 'Volumes', 'Embalagem', 'Remetente', 'Destinatário', 'Qtd. itens', 'Pessoas', 'PDF', 'Atualizado em', 'Origem', 'Dados'];
+const ABA_USUARIOS = 'Usuarios';
+const VERSAO_SCRIPT = '2.4';
+const CAB_MINUTAS = ['Minuta', 'Data', 'Volumes', 'Embalagem', 'Remetente', 'Destinatário', 'Qtd. itens', 'Pessoas', 'PDF', 'Atualizado em', 'Origem', 'Dados', 'Usuário'];
+const CAB_USUARIOS = ['Usuário', 'Nome', 'Perfil', 'Permissões', 'Ativo', 'Senha (protegida)', 'Sessão', 'Criado em', 'Último acesso'];
+
+// O que cada usuário pode acessar e alterar. O perfil "admin" tem tudo.
+const PERMISSOES = ['minutas.criar', 'minutas.editar', 'minutas.excluir', 'historico.ver', 'frete.usar', 'cadastros.editar', 'config.acessar', 'usuarios.gerenciar'];
+const PERFIS = {
+  admin: PERMISSOES,
+  operador: ['minutas.criar', 'minutas.editar', 'historico.ver', 'frete.usar', 'cadastros.editar'],
+  consulta: ['historico.ver'],
+  personalizado: null
+};
+const SESSAO_HORAS = 12;          // sessão normal
+const SESSAO_DIAS_LEMBRAR = 30;   // com "Manter conectado"
+const SENHA_MINIMO = 6;
+const SENHA_ITERACOES = 1000;     // PBKDF2-HMAC-SHA256 (o Apps Script é lento; não aumente demais)
+const MAX_TENTATIVAS = 5;         // depois disso o login espera 5 minutos
 const CAB_ITENS = ['Minuta', 'Data', 'Item', 'Rem. / Setor', 'Dest. / Setor', 'Qtd.', 'Conteúdo', 'Obs.'];
 
 function doPost(e) {
@@ -47,9 +78,23 @@ function doPost(e) {
   lock.waitLock(30000);
   try {
     const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    if (CODIGO_ACESSO && req.token !== CODIGO_ACESSO) return resposta({ ok: false, error: 'Código de acesso inválido.' });
-
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const abaU = obterAba(ss, ABA_USUARIOS, CAB_USUARIOS);
+    const usuarios = lerUsuarios(abaU);
+
+    // Ações de login (não exigem sessão).
+    if (req.acao === 'auth.estado') return resposta({ ok: true, temUsuarios: usuarios.length > 0 });
+    if (req.acao === 'auth.primeiro') return resposta(primeiroAcesso(ss, abaU, usuarios, req));
+    if (req.acao === 'auth.login') return resposta(entrar(ss, abaU, usuarios, req));
+
+    // Daqui para baixo: só com sessão válida (ou com o código, enquanto não houver usuários).
+    const quem = autenticar(req, usuarios);
+    if (req.acao === 'auth.eu') return resposta({ ok: true, usuario: publico(quem), sessao: renovarSessao(quem, req.sessao) });
+    if (req.acao === 'auth.senha') return resposta(trocarSenha(abaU, quem, req));
+    if (req.acao === 'usuarios.listar') { exigir(quem, 'usuarios.gerenciar'); return resposta({ ok: true, usuarios: usuarios.map(publico), permissoes: PERMISSOES, perfis: PERFIS }); }
+    if (req.acao === 'usuarios.salvar') { exigir(quem, 'usuarios.gerenciar'); return resposta(salvarUsuario(ss, abaU, usuarios, quem, req)); }
+    if (req.acao === 'usuarios.excluir') { exigir(quem, 'usuarios.gerenciar'); return resposta(excluirUsuario(abaU, usuarios, quem, req)); }
+
     const abaM = obterAba(ss, ABA_MINUTAS, CAB_MINUTAS);
     const abaI = obterAba(ss, ABA_ITENS, CAB_ITENS);
 
@@ -61,6 +106,7 @@ function doPost(e) {
     }
 
     if (req.acao === 'listar') {
+      exigir(quem, 'historico.ver');
       return resposta({ ok: true, versao: VERSAO_SCRIPT, url: ss.getUrl(), minutas: listarMinutas(ss, abaM, abaI) });
     }
 
@@ -69,6 +115,7 @@ function doPost(e) {
     if (!num) return resposta({ ok: false, error: 'Número de minuta inválido.' });
 
     if (req.acao === 'excluir') {
+      exigir(quem, 'minutas.excluir');
       const r = removerLinhas(abaM, num, true);
       removerLinhas(abaI, num, false);
       return resposta({ ok: true, removidas: r.qtd });
@@ -83,6 +130,8 @@ function doPost(e) {
         if (existeNumero(abaM, num)) return resposta({ ok: false, codigo: 'existe', proximo: proximo, error: 'A minuta nº ' + m.numero + ' já existe na planilha. Próximo número disponível: ' + proximo + '.' });
         if (Number(num) !== max + 1) return resposta({ ok: false, codigo: 'sequencia', proximo: proximo, error: 'A numeração foi alterada na planilha. Próximo número disponível: ' + proximo + '.' });
       }
+      // Gravar por cima de uma minuta que já existe é "alterar"; número novo é "criar".
+      exigir(quem, existeNumero(abaM, num) ? 'minutas.editar' : 'minutas.criar');
       const anterior = removerLinhas(abaM, num, true);
       removerLinhas(abaI, num, false);
 
@@ -96,7 +145,7 @@ function doPost(e) {
       const linhaM = abaM.getLastRow() + 1;
       abaM.getRange(linhaM, 1, 1, CAB_MINUTAS.length).setValues([[
         numeroTexto, m.data || '', m.volumes || '', m.embalagem || '', m.remetente || '', m.destinatario || '',
-        itens.length, pessoas, linkPdf, agoraTexto(ss), m.origem || '', m.dados ? JSON.stringify(m.dados) : ''
+        itens.length, pessoas, linkPdf, agoraTexto(ss), m.origem || '', m.dados ? JSON.stringify(m.dados) : '', quem.nome || quem.usuario || ''
       ]]);
 
       if (itens.length) {
@@ -112,7 +161,7 @@ function doPost(e) {
 
     return resposta({ ok: false, error: 'Ação desconhecida: ' + req.acao });
   } catch (err) {
-    return resposta({ ok: false, error: String((err && err.message) || err) });
+    return resposta({ ok: false, codigo: (err && err.codigo) || undefined, error: String((err && err.message) || err) });
   } finally {
     lock.releaseLock();
   }
@@ -252,4 +301,222 @@ function listarMinutas(ss, abaM, abaI) {
       atualizadoEm: textoCelula(r[9], ss, 'dd/MM/yyyy HH:mm:ss'), origem: textoCelula(r[10], ss), dados: dados, itens: itens
     };
   }).filter(function (x) { return x; });
+}
+
+// ============================================================
+//  USUÁRIOS, LOGIN E PERMISSÕES
+// ============================================================
+function erroAcesso(codigo, mensagem) { const e = new Error(mensagem); e.codigo = codigo; return e; }
+
+function normalizarUsuario(v) { return String(v == null ? '' : v).trim().toLowerCase(); }
+
+function permissoesEfetivas(perfil, lista) {
+  if (perfil === 'admin') return PERMISSOES.slice();
+  const base = PERFIS[perfil] ? PERFIS[perfil] : (Array.isArray(lista) ? lista : String(lista || '').split(/[,;\s]+/));
+  const p = PERMISSOES.filter(function (x) { return base.indexOf(x) >= 0; });
+  // Quem altera ou exclui precisa enxergar o histórico para achar a minuta.
+  if ((p.indexOf('minutas.editar') >= 0 || p.indexOf('minutas.excluir') >= 0) && p.indexOf('historico.ver') < 0) p.push('historico.ver');
+  return p;
+}
+
+function lerUsuarios(abaU) {
+  const ultima = abaU.getLastRow();
+  if (ultima < 2) return [];
+  const ss = abaU.getParent();
+  return abaU.getRange(2, 1, ultima - 1, CAB_USUARIOS.length).getValues().map(function (r, i) {
+    const usuario = normalizarUsuario(r[0]);
+    if (!usuario) return null;
+    const perfil = PERFIS.hasOwnProperty(String(r[2])) ? String(r[2]) : 'personalizado';
+    return {
+      linha: i + 2, usuario: usuario, nome: String(r[1] || ''), perfil: perfil, permissoes: permissoesEfetivas(perfil, r[3]),
+      ativo: String(r[4]).toUpperCase() !== 'NÃO', hash: String(r[5] || ''), sv: Number(r[6]) || 1,
+      criadoEm: textoCelula(r[7], ss, 'dd/MM/yyyy HH:mm:ss'), ultimoAcesso: textoCelula(r[8], ss, 'dd/MM/yyyy HH:mm:ss')
+    };
+  }).filter(function (x) { return x; });
+}
+
+function gravarUsuario(abaU, u) {
+  const linha = u.linha || (abaU.getLastRow() + 1);
+  abaU.getRange(linha, 1, 1, CAB_USUARIOS.length).setNumberFormat('@').setValues([[
+    u.usuario, u.nome, u.perfil, u.perfil === 'personalizado' ? u.permissoes.join(', ') : '', u.ativo ? 'SIM' : 'NÃO',
+    u.hash, String(u.sv), u.criadoEm || '', u.ultimoAcesso || ''
+  ]]);
+  u.linha = linha;
+  return u;
+}
+
+function publico(u) {
+  return { usuario: u.usuario, nome: u.nome, perfil: u.perfil, permissoes: u.permissoes, ativo: u.ativo !== false, criadoEm: u.criadoEm || '', ultimoAcesso: u.ultimoAcesso || '', legado: !!u.legado };
+}
+
+function exigir(quem, permissao) {
+  if (quem.permissoes.indexOf(permissao) < 0) throw erroAcesso('permissao', 'Seu usuário não tem permissão para isso (' + permissao + '). Fale com o administrador.');
+}
+
+function autenticar(req, usuarios) {
+  // Sem nenhum usuário cadastrado: funciona como antes, só com o código de acesso.
+  if (!usuarios.length) {
+    if (CODIGO_ACESSO && req.token !== CODIGO_ACESSO) throw erroAcesso('codigo', 'Código de acesso inválido.');
+    return { usuario: '', nome: '', perfil: 'admin', permissoes: PERMISSOES.slice(), ativo: true, legado: true };
+  }
+  const s = lerSessao(req.sessao);
+  const u = s && usuarios.filter(function (x) { return x.usuario === s.u; })[0];
+  if (!u || !u.ativo || u.sv !== s.sv) throw erroAcesso('login', 'Sessão encerrada. Entre de novo com seu usuário e senha.');
+  return u;
+}
+
+// ---------- senha (PBKDF2-HMAC-SHA256) ----------
+function derivarSenha(senha, sal, iteracoes) {
+  const chave = Utilities.newBlob(String(senha)).getBytes();
+  const bloco = Array.prototype.slice.call(Utilities.newBlob(String(sal)).getBytes()).concat([0, 0, 0, 1]);
+  let u = Utilities.computeHmacSha256Signature(bloco, chave);
+  const out = Array.prototype.slice.call(u);
+  for (let i = 1; i < iteracoes; i++) {
+    u = Utilities.computeHmacSha256Signature(u, chave);
+    for (let j = 0; j < out.length; j++) out[j] ^= u[j];
+  }
+  return Utilities.base64Encode(out);
+}
+function protegerSenha(senha) {
+  const sal = Utilities.getUuid().replace(/-/g, '');
+  return 'pbkdf2$' + SENHA_ITERACOES + '$' + sal + '$' + derivarSenha(senha, sal, SENHA_ITERACOES);
+}
+function iguais(a, b) {
+  a = String(a); b = String(b);
+  let dif = a.length ^ b.length;
+  for (let i = 0; i < a.length; i++) dif |= a.charCodeAt(i) ^ b.charCodeAt(i % (b.length || 1));
+  return dif === 0;
+}
+function conferirSenha(senha, guardado) {
+  const p = String(guardado || '').split('$');
+  if (p.length !== 4 || p[0] !== 'pbkdf2' || !senha) return false;
+  const n = Number(p[1]);
+  if (!(n >= 1 && n <= 100000)) return false;
+  return iguais(derivarSenha(senha, p[2], n), p[3]);
+}
+function validarSenhaNova(senha) {
+  senha = String(senha == null ? '' : senha);
+  if (senha.length < SENHA_MINIMO) throw erroAcesso('senha', 'A senha precisa ter pelo menos ' + SENHA_MINIMO + ' caracteres.');
+  if (senha.length > 100) throw erroAcesso('senha', 'A senha é longa demais.');
+  return senha;
+}
+
+// ---------- sessão (texto assinado; nada fica guardado na planilha) ----------
+function segredoSessao() {
+  const p = PropertiesService.getScriptProperties();
+  let s = p.getProperty('SEGREDO_SESSAO');
+  if (!s) { s = Utilities.getUuid() + Utilities.getUuid(); p.setProperty('SEGREDO_SESSAO', s); }
+  return s;
+}
+function assinar(texto) { return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(texto, segredoSessao())); }
+function criarSessao(u, lembrar) {
+  const expira = Date.now() + (lembrar ? SESSAO_DIAS_LEMBRAR * 24 : SESSAO_HORAS) * 3600 * 1000;
+  const corpo = Utilities.base64EncodeWebSafe(JSON.stringify({ u: u.usuario, sv: u.sv, exp: expira, l: lembrar ? 1 : 0 }), Utilities.Charset.UTF_8);
+  return { token: corpo + '.' + assinar(corpo), expira: expira };
+}
+function lerSessao(token) {
+  const partes = String(token || '').split('.');
+  if (partes.length !== 2 || !partes[0] || !iguais(assinar(partes[0]), partes[1])) return null;
+  try {
+    const s = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(partes[0])).getDataAsString());
+    return s && s.u && Number(s.exp) > Date.now() ? s : null;
+  } catch (e) { return null; }
+}
+// "Manter conectado": quando passa da metade do prazo, devolve uma sessão nova.
+function renovarSessao(u, token) {
+  const s = u.legado ? null : lerSessao(token);
+  if (!s || !s.l) return null;
+  return (s.exp - Date.now()) < SESSAO_DIAS_LEMBRAR * 12 * 3600 * 1000 ? criarSessao(u, true) : null;
+}
+
+// ---------- tentativas de login ----------
+function tentativas(chave) { return Number(CacheService.getScriptCache().get('falhas:' + chave)) || 0; }
+function contarFalha(chave) { CacheService.getScriptCache().put('falhas:' + chave, String(tentativas(chave) + 1), 300); }
+function limparFalhas(chave) { CacheService.getScriptCache().remove('falhas:' + chave); }
+function exigirTentativa(chave) {
+  if (tentativas(chave) >= MAX_TENTATIVAS) throw erroAcesso('bloqueado', 'Muitas tentativas seguidas. Aguarde 5 minutos e tente de novo.');
+}
+
+// ---------- ações ----------
+function validarNomeUsuario(v) {
+  const usuario = normalizarUsuario(v);
+  if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(usuario)) throw erroAcesso('usuario', 'O usuário deve ter de 3 a 30 caracteres: letras sem acento, números, ponto, hífen ou sublinhado.');
+  return usuario;
+}
+
+function primeiroAcesso(ss, abaU, usuarios, req) {
+  if (usuarios.length) throw erroAcesso('existe', 'O administrador já foi criado. Entre com usuário e senha.');
+  if (!CODIGO_ACESSO || CODIGO_ACESSO === 'TROQUE-ESTE-CODIGO') throw erroAcesso('codigo', 'Antes de criar o administrador, troque o CODIGO_ACESSO no script do Google por um código só seu e publique uma nova versão.');
+  exigirTentativa('primeiro');
+  if (!iguais(String(req.codigo || ''), CODIGO_ACESSO)) { contarFalha('primeiro'); throw erroAcesso('codigo', 'Código de acesso inválido.'); }
+  limparFalhas('primeiro');
+  const agora = agoraTexto(ss);
+  const u = gravarUsuario(abaU, {
+    usuario: validarNomeUsuario(req.usuario), nome: String(req.nome || '').trim() || 'Administrador', perfil: 'admin', permissoes: PERMISSOES.slice(),
+    ativo: true, hash: protegerSenha(validarSenhaNova(req.senha)), sv: 1, criadoEm: agora, ultimoAcesso: agora
+  });
+  return { ok: true, usuario: publico(u), sessao: criarSessao(u, !!req.lembrar) };
+}
+
+function entrar(ss, abaU, usuarios, req) {
+  if (!usuarios.length) throw erroAcesso('primeiro', 'Nenhum usuário cadastrado ainda. Faça o primeiro acesso.');
+  const nome = normalizarUsuario(req.usuario);
+  const chave = nome.slice(0, 40);
+  exigirTentativa(chave);
+  const u = usuarios.filter(function (x) { return x.usuario === nome; })[0];
+  if (!u || !conferirSenha(String(req.senha || ''), u.hash)) { contarFalha(chave); throw erroAcesso('credenciais', 'Usuário ou senha incorretos.'); }
+  if (!u.ativo) throw erroAcesso('inativo', 'Este usuário está desativado. Fale com o administrador.');
+  limparFalhas(chave);
+  u.ultimoAcesso = agoraTexto(ss);
+  abaU.getRange(u.linha, 9).setNumberFormat('@').setValue(u.ultimoAcesso);
+  return { ok: true, usuario: publico(u), sessao: criarSessao(u, !!req.lembrar) };
+}
+
+function trocarSenha(abaU, quem, req) {
+  if (quem.legado) throw erroAcesso('login', 'Entre com usuário e senha primeiro.');
+  exigirTentativa(quem.usuario);
+  if (!conferirSenha(String(req.atual || ''), quem.hash)) { contarFalha(quem.usuario); throw erroAcesso('credenciais', 'A senha atual não confere.'); }
+  limparFalhas(quem.usuario);
+  quem.hash = protegerSenha(validarSenhaNova(req.nova));
+  quem.sv += 1; // encerra as sessões abertas em outros aparelhos
+  gravarUsuario(abaU, quem);
+  const s = lerSessao(req.sessao);
+  return { ok: true, usuario: publico(quem), sessao: criarSessao(quem, !!(s && s.l)) };
+}
+
+function adminsAtivos(usuarios) { return usuarios.filter(function (x) { return x.ativo && x.perfil === 'admin'; }).length; }
+
+function salvarUsuario(ss, abaU, usuarios, quem, req) {
+  const d = req.usuario || {};
+  const nome = normalizarUsuario(d.usuario);
+  let u = usuarios.filter(function (x) { return x.usuario === nome; })[0];
+  if (req.novo) {
+    validarNomeUsuario(nome);
+    if (u) throw erroAcesso('existe', 'Já existe um usuário "' + nome + '".');
+    u = { usuario: nome, sv: 1, ativo: true, criadoEm: agoraTexto(ss), ultimoAcesso: '', hash: '' };
+    usuarios.push(u);
+    if (!d.senha) throw erroAcesso('senha', 'Defina uma senha para o novo usuário.');
+  } else if (!u) throw erroAcesso('usuario', 'Usuário não encontrado.');
+
+  const eraAtivo = u.ativo;
+  u.nome = String(d.nome == null ? (u.nome || '') : d.nome).trim().slice(0, 60) || nome;
+  u.perfil = PERFIS.hasOwnProperty(String(d.perfil)) ? String(d.perfil) : (u.perfil || 'consulta');
+  u.permissoes = permissoesEfetivas(u.perfil, d.permissoes || []);
+  u.ativo = d.ativo !== false;
+  if (u.usuario === quem.usuario && !u.ativo) throw erroAcesso('proprio', 'Você não pode desativar o seu próprio usuário.');
+  if (!adminsAtivos(usuarios)) throw erroAcesso('admin', 'Precisa existir pelo menos um administrador ativo.');
+  if (d.senha) { u.hash = protegerSenha(validarSenhaNova(d.senha)); if (!req.novo) u.sv += 1; }
+  if (eraAtivo && !u.ativo) u.sv += 1;
+  gravarUsuario(abaU, u);
+  return { ok: true, usuario: publico(u) };
+}
+
+function excluirUsuario(abaU, usuarios, quem, req) {
+  const nome = normalizarUsuario(req.usuario);
+  const u = usuarios.filter(function (x) { return x.usuario === nome; })[0];
+  if (!u) throw erroAcesso('usuario', 'Usuário não encontrado.');
+  if (u.usuario === quem.usuario) throw erroAcesso('proprio', 'Você não pode excluir o seu próprio usuário.');
+  if (!adminsAtivos(usuarios.filter(function (x) { return x !== u; }))) throw erroAcesso('admin', 'Precisa existir pelo menos um administrador ativo.');
+  abaU.deleteRow(u.linha);
+  return { ok: true, excluido: nome };
 }

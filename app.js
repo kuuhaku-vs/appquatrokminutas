@@ -184,7 +184,9 @@ const pad = (n) => String(n).padStart(cfg.digitos || 6, '0');
 
 let telaAtual = 'nova';
 function go(v) {
-  const destino = document.getElementById('v-' + v) ? v : 'nova';
+  let destino = document.getElementById('v-' + v) ? v : 'nova';
+  // Controle de acesso: tela não liberada para o usuário vira a primeira tela que ele pode abrir.
+  if (window.AUTH && !window.AUTH.podeTela(destino)) destino = window.AUTH.primeiraTela();
   telaAtual = destino;
   document.querySelectorAll('.view').forEach((e) => e.classList.toggle('active', e.id === 'v-' + destino));
   document.querySelectorAll('.nav').forEach((e) => e.classList.toggle('active', e.dataset.go === destino));
@@ -192,6 +194,7 @@ function go(v) {
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (destino === 'historico') renderHist();
   if (destino === 'config') renderCfg();
+  if (destino === 'usuarios') window.AUTH?.renderUsuarios?.();
 }
 document.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => go(b.dataset.go)));
 function fecharModal(modal) {
@@ -1059,7 +1062,7 @@ function navegarComAlt(n) {
   if (mapa[n]) { go(mapa[n]); return true; }
   return false;
 }
-function atalhoExecutar(id) { const el = $(id); if (el && !el.disabled) { el.click(); return true; } return false; }
+function atalhoExecutar(id) { const el = $(id); if (el && !el.disabled && getComputedStyle(el).display !== 'none') { el.click(); return true; } return false; }
 
 document.addEventListener('keydown', (e) => {
   if (e.isComposing) return;
@@ -1239,7 +1242,8 @@ setTimeout(() => {
   if (el) el.title = 'F1 atalhos · Ctrl+S PDF · Ctrl+Shift+S planilha · Ctrl+N nova · Ctrl+P imprimir · F2 item · F3 volume · F4 remetente · F5 destinatário · F6 visualizar · F7 PDF · F8 histórico · Esc fechar';
 }, 1500);
 
-window.addEventListener("DOMContentLoaded", () => atualizarAutocompletes());
+// O app.js agora é carregado depois do login, quando a página já está pronta.
+if (document.readyState === "loading") window.addEventListener("DOMContentLoaded", () => atualizarAutocompletes()); else atualizarAutocompletes();
 
 
 /* =========================================================

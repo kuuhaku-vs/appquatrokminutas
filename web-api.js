@@ -25,31 +25,36 @@
   const digitos = () => Math.max(1, Number(lerCfg().digitos) || 6);
 
   let estado = { enviando: false, ultimoOk: null, ultimoErro: null };
+  let sessao = ''; // sessão do usuário logado (definida pelo auth.js)
   const ouvintes = [];
   function status() {
     const s = cfgSheets();
-    return { configurado: !!(s.url && s.token), ativo: true, banco: true, pendentes: 0, ...estado };
+    return { configurado: !!(s.url && (sessao || s.token)), ativo: true, banco: true, pendentes: 0, ...estado };
   }
   const avisar = () => ouvintes.forEach((cb) => { try { cb(status()); } catch {} });
 
   async function remoto(payload, { timeout = 45000, override = null } = {}) {
     const s = override ? { ...cfgSheets(), ...override } : cfgSheets();
-    if (!s.url) throw new Error('Informe a URL do Google Sheets em Configurações.');
-    if (!s.token) throw new Error('Informe o código de acesso em Configurações › Google Sheets (uma vez por aparelho).');
+    if (!s.url) { const e = new Error('Informe a URL do Google Sheets em Configurações.'); e.codigo = 'semurl'; throw e; }
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeout);
     let r;
     try {
       // text/plain: o Google aceita sem pedido prévio de permissão (CORS)
       r = await fetch(s.url, { method: 'POST', redirect: 'follow', cache: 'no-store', signal: ctl.signal,
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...payload, token: s.token }) });
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...payload, token: s.token || undefined, sessao: sessao || undefined }) });
     } catch (e) {
       throw new Error(e.name === 'AbortError' ? 'O Google Sheets não respondeu a tempo. Confira a internet.' : 'Sem conexão com o Google Sheets. Confira a internet.');
     } finally { clearTimeout(t); }
     let j;
     try { j = await r.json(); } catch { throw new Error('O Google respondeu de um jeito inesperado. Confira a URL do App da Web.'); }
     if (j && j.url) lsSet(K_URLSHEET, j.url);
-    if (j && !j.versao) throw new Error(MSG_ANTIGO);
-    if (!j || !j.ok) throw new Error((j && j.error) || 'O Google Sheets recusou o pedido.');
+    if (j && !j.versao) { const e = new Error(MSG_ANTIGO); e.versao = '0'; throw e; }
+    if (!j || !j.ok) {
+      const e = new Error((j && j.error) || 'O Google Sheets recusou o pedido.');
+      e.codigo = j && j.codigo; e.versao = (j && j.versao) || '0';
+      if (e.codigo === 'login') window.dispatchEvent(new CustomEvent('gm-sessao-encerrada'));
+      throw e;
+    }
     return j;
   }
 
@@ -165,15 +170,15 @@
     },
     sheetsReenviar: async () => status(),
     sheetsSincronizarTudo: async () => ({ ok: false, error: 'Disponível só no programa do computador.' }),
+    // Login e usuários: conversa com o script e devolve a resposta inteira (auth.js decide o que fazer).
+    auth: async (acao, dados) => {
+      try { return await remoto({ acao: String(acao), ...(dados || {}) }, { timeout: 30000 }); }
+      catch (e) { return { ok: false, error: erroTxt(e), codigo: e.codigo, versao: e.versao }; }
+    },
+    authSessao: async (token) => { sessao = String(token || ''); avisar(); return true; },
     onSheetsStatus: (cb) => { ouvintes.push(cb); return () => { const i = ouvintes.indexOf(cb); if (i >= 0) ouvintes.splice(i, 1); }; },
   };
 
   // Elementos que só fazem sentido no programa do Windows.
   document.documentElement.classList.add('is-web');
-  // Primeira vez neste aparelho: leva direto ao código de acesso.
-  if (!cfgSheets().token) {
-    window.addEventListener('load', () => setTimeout(() => {
-      try { window.go?.('config'); document.getElementById('cfgSheetsToken')?.focus(); } catch {}
-    }, 2600));
-  }
 })();

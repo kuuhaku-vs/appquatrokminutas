@@ -677,6 +677,7 @@ ipcMain.handle('pdf:abrir', (_e, p) => (/^https?:\/\//i.test(String(p || '')) ? 
 const SHEETS_FILA = 'sheets-fila.json';
 const MSG_SCRIPT_ANTIGO = 'O script do Google está desatualizado. No Apps Script, cole o novo GoogleSheets_Script.gs e publique em Implantar › Gerenciar implantações › lápis › Versão: Nova versão › Implantar.';
 let sheetsEstado = { enviando: false, ultimoOk: null, ultimoErro: null, planilhaUrl: '' };
+let sessaoUsuario = ''; // sessão do usuário logado; a tela (auth.js) informa pelo 'auth:sessao'
 
 function sheetsCfg() {
   const c = getConfigSeguro().sheets || {};
@@ -705,7 +706,7 @@ async function sheetsPost(payload, timeoutMs = 30000, override = null) {
     const r = await fetch(c.url, {
       method: 'POST', redirect: 'follow', signal: ctrl.signal,
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ ...payload, token: c.token }),
+      body: JSON.stringify({ ...payload, token: c.token || undefined, sessao: sessaoUsuario || undefined }),
     });
     const texto = await r.text();
     let j;
@@ -719,7 +720,7 @@ async function sheetsPost(payload, timeoutMs = 30000, override = null) {
     // Script antigo (sem "versao") não conhece numeração/listagem: avisa de forma clara.
     if (['proximo', 'listar', 'teste'].includes(payload.acao) && !j.versao && (payload.acao !== 'teste' || bancoGoogle())) throw new Error(MSG_SCRIPT_ANTIGO);
     if (payload.validarSequencia && !j.versao) throw new Error(MSG_SCRIPT_ANTIGO);
-    if (!j.ok) throw new Error(j.error || 'O Google Sheets recusou o envio.');
+    if (!j.ok) { const er = new Error(j.error || 'O Google Sheets recusou o envio.'); er.codigo = j.codigo; er.versao = j.versao || '0'; throw er; }
     return j;
   } catch (e) {
     if (e.name === 'AbortError') throw new Error('Tempo esgotado ao falar com o Google.');
@@ -864,6 +865,15 @@ function historicoDeSheets(lista) {
   return out;
 }
 
+// Login e usuários (o script do Google valida tudo; aqui só repassa).
+ipcMain.handle('auth:sessao', (_e, token) => { sessaoUsuario = String(token || ''); return true; });
+ipcMain.handle('auth:chamar', async (_e, p) => {
+  const acao = String(p?.acao || '');
+  if (!/^(auth|usuarios)\.[a-z]+$/.test(acao)) return { ok: false, error: 'Ação inválida.' };
+  if (!sheetsCfg().url) return { ok: false, codigo: 'semurl', error: 'O Google Sheets não está configurado neste computador.' };
+  try { return await sheetsPost({ ...(p?.dados || {}), acao }, 30000); }
+  catch (e) { return { ok: false, error: String(e?.message || e), codigo: e?.codigo, versao: e?.versao }; }
+});
 ipcMain.handle('sheets:status', () => resumoSheets());
 ipcMain.handle('sheets:reenviar', async () => { await processarFilaSheets(); return resumoSheets(); });
 ipcMain.handle('sheets:testar', async (_e, tmp) => {

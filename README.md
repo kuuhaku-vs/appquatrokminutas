@@ -15,10 +15,35 @@ O mesmo código roda de dois jeitos:
 
 ## No celular
 1. Abra `https://kuuhaku-vs.github.io/appquatrokminutas/` no Safari (iPhone) ou Chrome (Android).
-2. Na primeira vez o app abre em **Configurações › Google Sheets**: digite o **código de acesso**
-   (o mesmo do `CODIGO_ACESSO` do script), toque em **Testar conexão** e em **Salvar**.
-   O código fica guardado só neste aparelho; ele nunca vai para o GitHub.
+2. Entre com seu **usuário e senha** (veja *Usuários e login*). Marque **Manter conectado** se o aparelho for só seu.
 3. Vire app: iPhone → Compartilhar → **Adicionar à Tela de Início**; Android → ⋮ → **Instalar app**.
+
+## Usuários e login
+O app abre numa tela de login. Cada pessoa entra com o próprio usuário e senha, e o perfil dela define o que pode acessar e alterar.
+
+**Ativar (uma vez):**
+1. Publique a versão nova do `GoogleSheets_Script.gs` (veja *Atualizar* abaixo), com um `CODIGO_ACESSO` só seu.
+2. Abra o app. A tela **Primeiro acesso** pede o código de acesso e cria o **administrador**.
+3. No menu **Usuários**, o administrador cria as outras pessoas.
+
+Enquanto o script antigo estiver publicado, ou enquanto nenhum usuário existir, tudo funciona como antes.
+
+| Perfil | Pode |
+|---|---|
+| Administrador | Tudo, incluindo usuários |
+| Operador | Criar e alterar minutas, histórico, frete cortesia, cadastros |
+| Consulta | Só o histórico |
+| Personalizado | O administrador marca item por item |
+
+Permissões: *Histórico*, *Frete cortesia*, *Configurações* (acessar) e *Criar minutas*, *Alterar minutas*, *Excluir minutas*, *Alterar cadastros*, *Gerenciar usuários* (alterar).
+
+- Quem confere a sessão e a permissão é o script do Google, em cada pedido. A tela só esconde o que não está liberado.
+- Os usuários ficam na aba **Usuarios** da planilha. A senha é guardada protegida (hash com sal); não edite as colunas *Senha (protegida)* e *Sessão*.
+- A coluna **Usuário** da aba *Minutas* mostra quem gravou cada minuta por último.
+- Sessão: 12 horas, ou 30 dias com **Manter conectado**. Cinco senhas erradas seguidas bloqueiam o login por 5 minutos.
+- Desativar um usuário ou redefinir a senha dele encerra as sessões abertas na hora.
+- **Esqueci a senha do administrador:** na planilha, apague as linhas da aba *Usuarios* (deixe a linha 1) e refaça o primeiro acesso.
+- No programa do Windows, o login vale quando o Google Sheets está configurado. Sem URL do Google (só planilha local), ele abre sem login.
 
 ## Publicar no GitHub Pages (uma vez só)
 **Settings → Pages** → *Build and deployment*: Source = **Deploy from a branch**, Branch = **main** / **(root)** → **Save**.
@@ -43,6 +68,7 @@ Em **Configurações › Google Sheets**, escolha **Base de dados: Google Sheets
 
 ## Arquivos
 - `index.html`, `style.css`, `app.js`, `ui.js` — telas e regras (iguais no web e no Windows)
+- `auth.js`, `auth.css` — tela de login, usuário logado, tela de usuários e bloqueio por permissão
 - `print.js`, `frete-cortesia.js` — modelos de impressão da minuta e do frete cortesia
 - `web-api.js`, `config.js` — ligação direta com o Google quando roda no navegador
 - `sw.js`, `manifest.webmanifest`, `icon-*.png` — app instalável (PWA)
