@@ -65,8 +65,13 @@
  *   • Quando um pedido de envio é INCLUÍDO numa minuta ou RECUSADO, quem
  *     fez o pedido recebe um e-mail, se tiver e-mail no cadastro (coluna
  *     "E-mail" da aba Usuarios, preenchida em Usuários ou em Minha conta).
- *   • O e-mail sai da conta Google dona deste script. Ajuste o nome, a
- *     assinatura e o endereço de resposta em EMAIL_* logo abaixo.
+ *   • O TEXTO DO E-MAIL É EDITÁVEL NO PRÓPRIO GERADOR: Usuários › Aviso por
+ *     e-mail › Editar modelo (só o Administrador). Lá dá para mudar assunto,
+ *     textos, assinatura, rodapé e o que aparece no quadro, com prévia ao vivo.
+ *     O modelo fica guardado neste script (Propriedades do script) e vale
+ *     para todos os aparelhos. Os valores EMAIL_* abaixo são só o padrão
+ *     usado enquanto ninguém salvou um modelo (ou em "Restaurar padrão").
+ *   • O e-mail sai da conta Google dona deste script.
  *   • AUTORIZAR (uma vez, depois de colar esta versão): no editor do Apps
  *     Script, escolha a função testarEmail na barra de cima e clique em
  *     Executar. Autorize "Enviar e-mail como você". Chegam dois e-mails de
@@ -143,6 +148,10 @@ function doPost(e) {
     if (req.acao === 'pedidos.excluir') { exigir(quem, 'pedidos.excluir'); return resposta(excluirPedidos(ss, req)); }
     if (req.acao === 'usuarios.listar') { exigir(quem, 'usuarios.gerenciar'); return resposta({ ok: true, usuarios: usuarios.map(publico), permissoes: PERMISSOES, perfis: PERFIS }); }
     if (req.acao === 'usuarios.salvar') { exigir(quem, 'usuarios.gerenciar'); return resposta(salvarUsuario(ss, abaU, usuarios, quem, req)); }
+    if (req.acao === 'usuarios.emailmodelo') { exigir(quem, 'usuarios.gerenciar'); const mm = lerModeloEmail(); return resposta({ ok: true, modelo: mm.modelo, personalizado: mm.personalizado, padrao: modeloEmailPadrao() }); }
+    if (req.acao === 'usuarios.emailsalvar') { exigir(quem, 'usuarios.gerenciar'); return resposta(salvarModeloEmail(req)); }
+    if (req.acao === 'usuarios.emailprevia') { exigir(quem, 'usuarios.gerenciar'); return resposta(previaEmail(req, quem)); }
+    if (req.acao === 'usuarios.emailteste') { exigir(quem, 'usuarios.gerenciar'); return resposta(testeEmail(req, quem)); }
     if (req.acao === 'usuarios.excluir') { exigir(quem, 'usuarios.gerenciar'); return resposta(excluirUsuario(abaU, usuarios, quem, req)); }
 
     const abaM = obterAba(ss, ABA_MINUTAS, CAB_MINUTAS);
@@ -746,12 +755,111 @@ function excluirPedidos(ss, req) {
 // ============================================================
 //  AVISOS POR E-MAIL (pedido incluído na minuta ou recusado)
 // ============================================================
+const CHAVE_MODELO_EMAIL = 'EMAIL_MODELO_V1';
+
+// Modelo padrão. Campos de texto aceitam:
+//   {primeiro_nome} {nome} {usuario} {minuta} {o_seu_pedido} {atendente} {data} {de} {para} {motivo}
+//   **texto** = negrito · linha em branco = novo parágrafo · campo vazio = não aparece no e-mail.
+function modeloEmailPadrao() {
+  return {
+    ativo: EMAIL_ATIVO,
+    remetente: EMAIL_NOME_REMETENTE,
+    responderPara: EMAIL_RESPONDER_PARA,
+    faixa: 'Expedição · Pedidos de envio',
+    mostrarLogo: true,
+    saudacao: 'Olá, {primeiro_nome},',
+    incluido: {
+      assunto: 'Pedido de envio incluído na minuta nº {minuta}',
+      abertura: 'Informamos que {o_seu_pedido} foi incluído na **minuta de despacho nº {minuta}** e seguirá no malote correspondente.',
+      selo: 'INCLUÍDO',
+      linhaAtendente: 'Incluído por **{atendente}** em {data}.',
+      fechamento: 'Caso precise de alguma alteração, responda a este e-mail ou entre em contato com a equipe de Expedição o quanto antes.'
+    },
+    recusado: {
+      assunto: 'Pedido de envio não incluído: {de} → {para}',
+      abertura: 'Informamos que {o_seu_pedido} **não pôde ser incluído** no malote. Confira abaixo os detalhes e o motivo informado.',
+      selo: 'RECUSADO',
+      linhaAtendente: 'Analisado por **{atendente}** em {data}.',
+      fechamento: 'Se ainda for necessário, você pode lançar um novo pedido no Gerador de Minutas ou responder a este e-mail para combinar o envio.'
+    },
+    campos: { minuta: true, de: true, para: true, quantidade: true, observacao: true, pedidoEm: true, motivo: true },
+    botao: { mostrar: true, texto: 'Abrir o Gerador de Minutas' },
+    despedida: 'Atenciosamente,',
+    assinatura: [EMAIL_ASSINATURA.nome, EMAIL_ASSINATURA.cargo, EMAIL_ASSINATURA.empresa, EMAIL_ASSINATURA.contato].filter(String).join('\n'),
+    rodape: 'Mensagem automática enviada pelo Gerador de Minutas · ' + EMAIL_ASSINATURA.empresa + '. Você recebe este aviso porque fez um pedido de envio com o usuário **@{usuario}**.'
+  };
+}
+
+// Junta o modelo salvo com o padrão (campos novos de versões futuras ganham o valor padrão).
+function mesclarModelo(base, salvo) {
+  const out = {};
+  Object.keys(base).forEach(function (k) {
+    const b = base[k], v = salvo ? salvo[k] : undefined;
+    if (b && typeof b === 'object' && !Array.isArray(b)) out[k] = mesclarModelo(b, v && typeof v === 'object' ? v : {});
+    else if (v === undefined || v === null) out[k] = b;
+    else if (typeof b === 'boolean') out[k] = !!v;
+    else out[k] = String(v).slice(0, 2000);
+  });
+  return out;
+}
+
+function lerModeloEmail() {
+  let salvo = null;
+  try { salvo = JSON.parse(PropertiesService.getScriptProperties().getProperty(CHAVE_MODELO_EMAIL) || 'null'); } catch (e) { salvo = null; }
+  return { modelo: mesclarModelo(modeloEmailPadrao(), salvo), personalizado: !!salvo };
+}
+
+function salvarModeloEmail(req) {
+  if (req.restaurar) {
+    PropertiesService.getScriptProperties().deleteProperty(CHAVE_MODELO_EMAIL);
+    return { ok: true, modelo: modeloEmailPadrao(), personalizado: false, padrao: modeloEmailPadrao() };
+  }
+  const m = mesclarModelo(modeloEmailPadrao(), req.modelo || {});
+  if (m.responderPara) m.responderPara = validarEmail(m.responderPara);
+  if (!String(m.remetente).trim()) m.remetente = EMAIL_NOME_REMETENTE;
+  if (!String(m.incluido.assunto).trim() || !String(m.recusado.assunto).trim()) throw erroAcesso('email', 'O assunto do e-mail não pode ficar vazio.');
+  PropertiesService.getScriptProperties().setProperty(CHAVE_MODELO_EMAIL, JSON.stringify(m));
+  return { ok: true, modelo: m, personalizado: true, padrao: modeloEmailPadrao() };
+}
+
+// Pedido de exemplo para a prévia e o e-mail de teste.
+function exemploEmail(tipo, quem) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const agora = agoraTexto(ss);
+  const dono = { usuario: (quem && quem.usuario) || 'maria.silva', nome: (quem && quem.nome) || 'Maria Silva', email: (quem && quem.email) || '' };
+  const p = { criadoEm: agora, atendidoEm: agora, de: 'Mariana - Comercial', para: 'Sheila - Recepção SCS', qtd: 2, conteudo: 'Envelope', obs: 'Entregar em mãos',
+    minuta: tipo === 'incluido' ? '000123' : '', motivo: tipo === 'recusado' ? 'Vai pelo correio nesta semana.' : '' };
+  return { dono: dono, pedidos: [p], quem: { nome: (quem && quem.nome) || 'Expedição', email: '' } };
+}
+
+function previaEmail(req, quem) {
+  const tipo = req.tipo === 'recusado' ? 'recusado' : 'incluido';
+  const modelo = mesclarModelo(modeloEmailPadrao(), req.modelo || lerModeloEmail().modelo);
+  const ex = exemploEmail(tipo, quem);
+  const msg = montarEmailPedido(tipo, ex.dono, ex.pedidos, ex.quem, modelo);
+  return { ok: true, assunto: msg.assunto, html: msg.html, texto: msg.texto };
+}
+
+function testeEmail(req, quem) {
+  const para = (quem && quem.email) || Session.getEffectiveUser().getEmail();
+  if (!para) throw erroAcesso('email', 'Cadastre o seu e-mail em Minha conta para receber o teste.');
+  const modelo = mesclarModelo(modeloEmailPadrao(), req.modelo || lerModeloEmail().modelo);
+  ['incluido', 'recusado'].forEach(function (tipo) {
+    const ex = exemploEmail(tipo, quem);
+    const msg = montarEmailPedido(tipo, ex.dono, ex.pedidos, ex.quem, modelo);
+    MailApp.sendEmail(para, '[TESTE] ' + msg.assunto, msg.texto, { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html });
+  });
+  return { ok: true, para: para, cota: MailApp.getRemainingDailyQuota() };
+}
+
 // Um e-mail por pessoa: se vários pedidos dela entram na mesma minuta, vão juntos.
 // Nunca derruba a gravação: qualquer falha no envio fica só no registro de execução.
 function avisarPedidosPorEmail(ss, pedidos, tipo, quem) {
-  if (!EMAIL_ATIVO || !pedidos || !pedidos.length) return 0;
+  if (!pedidos || !pedidos.length) return 0;
   let enviados = 0;
   try {
+    const modelo = lerModeloEmail().modelo;
+    if (!modelo.ativo) return 0;
     const usuarios = lerUsuarios(obterAba(ss, ABA_USUARIOS, CAB_USUARIOS));
     const porUsuario = {};
     pedidos.forEach(function (p) { (porUsuario[p.usuario] = porUsuario[p.usuario] || []).push(p); });
@@ -759,9 +867,9 @@ function avisarPedidosPorEmail(ss, pedidos, tipo, quem) {
       const dono = usuarios.filter(function (u) { return u.usuario === login; })[0];
       if (!dono || !dono.email || dono.ativo === false) return;
       if (MailApp.getRemainingDailyQuota() < 1) { console.warn('Cota diária de e-mails esgotada.'); return; }
-      const msg = montarEmailPedido(tipo, dono, porUsuario[login], quem);
-      const opcoes = { name: EMAIL_NOME_REMETENTE, htmlBody: msg.html };
-      const responder = EMAIL_RESPONDER_PARA || (quem && quem.email) || '';
+      const msg = montarEmailPedido(tipo, dono, porUsuario[login], quem, modelo);
+      const opcoes = { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html };
+      const responder = modelo.responderPara || (quem && quem.email) || '';
       if (responder) opcoes.replyTo = responder;
       MailApp.sendEmail(dono.email, msg.assunto, msg.texto, opcoes);
       enviados++;
@@ -778,116 +886,123 @@ function escHtml(v) {
 
 function primeiroNome(nome) { return String(nome || '').trim().split(/\s+/)[0] || 'colaborador(a)'; }
 
-function montarEmailPedido(tipo, dono, pedidos, quem) {
+// Troca {variáveis} pelo valor (texto puro).
+function preencherVars(txt, vars) {
+  return String(txt == null ? '' : txt).replace(/\{([a-z_]+)\}/gi, function (m, k) { return Object.prototype.hasOwnProperty.call(vars, k.toLowerCase()) ? vars[k.toLowerCase()] : m; });
+}
+// Texto do modelo → HTML: escapa, troca variáveis, **negrito**, parágrafos e quebras de linha.
+function textoParaHtml(txt, vars, estiloP) {
+  const t = preencherVars(txt, vars).trim();
+  if (!t) return '';
+  return t.split(/\n\s*\n/).map(function (par) {
+    const h = escHtml(par.trim()).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+    return '<p style="' + estiloP + '">' + h + '</p>';
+  }).join('');
+}
+// Texto do modelo → texto simples (versão sem formatação do e-mail).
+function textoParaTexto(txt, vars) { return preencherVars(txt, vars).replace(/\*\*(.+?)\*\*/g, '$1').trim(); }
+
+function montarEmailPedido(tipo, dono, pedidos, quem, modelo) {
+  modelo = modelo || lerModeloEmail().modelo;
   const incluido = tipo === 'incluido';
-  const minuta = pedidos[0].minuta || '';
-  const atendente = (quem && (quem.nome || quem.usuario)) || pedidos[0].atendidoPor || 'Expedição';
-  const quando = pedidos[0].atendidoEm || '';
+  const t = incluido ? modelo.incluido : modelo.recusado;
+  const c = modelo.campos;
+  const p0 = pedidos[0];
   const varios = pedidos.length > 1;
-
-  const assunto = incluido
-    ? (varios ? 'Seus pedidos de envio foram incluídos na minuta nº ' : 'Seu pedido de envio foi incluído na minuta nº ') + minuta
-    : 'Pedido de envio não incluído: ' + pedidos[0].de + ' → ' + pedidos[0].para;
-
-  const abertura = incluido
-    ? (varios
-        ? 'Informamos que os seus pedidos de envio listados abaixo foram incluídos na <b>minuta de despacho nº ' + escHtml(minuta) + '</b> e seguirão no malote correspondente.'
-        : 'Informamos que o seu pedido de envio foi incluído na <b>minuta de despacho nº ' + escHtml(minuta) + '</b> e seguirá no malote correspondente.')
-    : 'Informamos que o seu pedido de envio <b>não pôde ser incluído</b> no malote. Confira abaixo os detalhes e o motivo informado pela Expedição.';
-
-  const fechamento = incluido
-    ? 'Caso precise de alguma alteração, responda a este e-mail ou entre em contato com a equipe de Expedição o quanto antes.'
-    : 'Se ainda for necessário, você pode lançar um novo pedido no Gerador de Minutas ou responder a este e-mail para combinar o envio com a Expedição.';
-
+  const vars = {
+    primeiro_nome: primeiroNome(dono.nome), nome: dono.nome || dono.usuario, usuario: dono.usuario,
+    minuta: p0.minuta || '', o_seu_pedido: varios ? 'os seus pedidos de envio' : 'o seu pedido de envio',
+    atendente: (quem && (quem.nome || quem.usuario)) || p0.atendidoPor || '', data: p0.atendidoEm || '',
+    de: p0.de || '', para: p0.para || '', motivo: p0.motivo || 'Não informado'
+  };
   const cor = incluido ? '#16794c' : '#b42318';
-  const selo = incluido ? 'INCLUÍDO' : 'RECUSADO';
+  const estiloP = 'margin:0 0 14px;color:#374151;font-size:14px;line-height:1.6;';
+
+  const assunto = textoParaTexto(t.assunto, vars).replace(/\s+/g, ' ') || (incluido ? 'Pedido de envio incluído' : 'Pedido de envio recusado');
 
   const linha = function (rot, val) {
     if (val === '' || val == null) return '';
     return '<tr><td style="padding:6px 12px 6px 0;color:#5b6475;font-size:13px;white-space:nowrap;vertical-align:top;">' + escHtml(rot) + '</td>' +
       '<td style="padding:6px 0;color:#111827;font-size:13px;font-weight:600;vertical-align:top;">' + escHtml(val) + '</td></tr>';
   };
+  const detalhes = function (p) {
+    return [
+      incluido && c.minuta ? ['Minuta nº', p.minuta] : null,
+      c.de ? ['De', p.de] : null,
+      c.para ? ['Para', p.para] : null,
+      c.quantidade ? ['Quantidade', p.qtd + ' · ' + p.conteudo] : null,
+      c.observacao ? ['Observação', p.obs] : null,
+      c.pedidoEm ? ['Pedido em', p.criadoEm] : null,
+      !incluido && c.motivo ? ['Motivo', p.motivo || 'Não informado'] : null
+    ].filter(function (x) { return x && x[1] !== '' && x[1] != null; });
+  };
+  const selo = String(t.selo || '').trim();
   const cartoes = pedidos.map(function (p) {
+    const ds = detalhes(p);
+    if (!ds.length && !selo) return '';
     return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e3e7ee;border-radius:10px;margin:0 0 12px;background:#f8fafc;">' +
       '<tr><td style="padding:14px 16px;">' +
-      '<div style="margin:0 0 8px;"><span style="display:inline-block;padding:3px 10px;border-radius:99px;background:' + cor + ';color:#ffffff;font-size:11px;font-weight:700;letter-spacing:.04em;">' + selo + '</span></div>' +
-      '<table role="presentation" cellpadding="0" cellspacing="0">' +
-      (incluido ? linha('Minuta nº', p.minuta) : '') +
-      linha('De', p.de) + linha('Para', p.para) +
-      linha('Quantidade', p.qtd + ' · ' + p.conteudo) +
-      linha('Observação', p.obs) +
-      linha('Pedido em', p.criadoEm) +
-      (incluido ? '' : linha('Motivo', p.motivo || 'Não informado')) +
-      '</table></td></tr></table>';
+      (selo ? '<div style="margin:0 0 8px;"><span style="display:inline-block;padding:3px 10px;border-radius:99px;background:' + cor + ';color:#ffffff;font-size:11px;font-weight:700;letter-spacing:.04em;">' + escHtml(selo) + '</span></div>' : '') +
+      '<table role="presentation" cellpadding="0" cellspacing="0">' + ds.map(function (d) { return linha(d[0], d[1]); }).join('') + '</table></td></tr></table>';
   }).join('');
 
+  const linhasAss = String(modelo.assinatura || '').split('\n').map(function (x) { return preencherVars(x, vars).trim(); }).filter(String);
   const assinatura =
-    '<p style="margin:24px 0 0;color:#111827;font-size:14px;">Atenciosamente,</p>' +
-    '<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;border-left:3px solid #2563eb;"><tr><td style="padding:2px 0 2px 12px;">' +
-    '<div style="font-size:14px;font-weight:700;color:#0f1a33;">' + escHtml(EMAIL_ASSINATURA.nome) + '</div>' +
-    '<div style="font-size:12.5px;color:#5b6475;">' + escHtml(EMAIL_ASSINATURA.cargo) + '</div>' +
-    '<div style="font-size:12.5px;color:#0f1a33;font-weight:600;">' + escHtml(EMAIL_ASSINATURA.empresa) + '</div>' +
-    (EMAIL_ASSINATURA.contato ? '<div style="font-size:12px;color:#5b6475;margin-top:2px;">' + escHtml(EMAIL_ASSINATURA.contato) + '</div>' : '') +
-    '</td></tr></table>';
+    (String(modelo.despedida || '').trim() ? textoParaHtml(modelo.despedida, vars, 'margin:24px 0 0;color:#111827;font-size:14px;') : '') +
+    (linhasAss.length ? '<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;border-left:3px solid #2563eb;"><tr><td style="padding:2px 0 2px 12px;">' +
+      linhasAss.map(function (l, i) {
+        const est = i === 0 ? 'font-size:14px;font-weight:700;color:#0f1a33;' : 'font-size:12.5px;color:#5b6475;';
+        return '<div style="' + est + '">' + escHtml(l).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>') + '</div>';
+      }).join('') + '</td></tr></table>' : '');
+
+  const cabecalho = (modelo.mostrarLogo || String(modelo.faixa).trim())
+    ? '<tr><td style="background:#0f1a33;padding:22px 28px;">' +
+      (modelo.mostrarLogo ? '<img src="' + URL_LOGO_EMAIL + '" alt="Grupo Quatro K" width="150" style="display:block;width:150px;max-width:150px;height:auto;border:0;">' : '') +
+      (String(modelo.faixa).trim() ? '<div style="' + (modelo.mostrarLogo ? 'margin-top:10px;' : '') + 'color:#9fb3d9;font-size:12px;letter-spacing:.08em;text-transform:uppercase;">' + escHtml(preencherVars(modelo.faixa, vars)) + '</div>' : '') +
+      '</td></tr>'
+    : '';
 
   const html =
     '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>' +
     '<body style="margin:0;padding:0;background:#eef1f6;font-family:Segoe UI,Arial,Helvetica,sans-serif;">' +
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f6;padding:24px 12px;"><tr><td align="center">' +
     '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ee;">' +
-    '<tr><td style="background:#0f1a33;padding:22px 28px;">' +
-    '<img src="' + URL_LOGO_EMAIL + '" alt="Grupo Quatro K" width="150" style="display:block;width:150px;max-width:150px;height:auto;border:0;">' +
-    '<div style="margin-top:10px;color:#9fb3d9;font-size:12px;letter-spacing:.08em;text-transform:uppercase;">Expedição · Pedidos de envio</div>' +
-    '</td></tr>' +
+    cabecalho +
     '<tr><td style="height:4px;background:' + cor + ';line-height:4px;font-size:0;">&nbsp;</td></tr>' +
     '<tr><td style="padding:28px;">' +
-    '<p style="margin:0 0 14px;color:#111827;font-size:15px;">Olá, ' + escHtml(primeiroNome(dono.nome)) + ',</p>' +
-    '<p style="margin:0 0 20px;color:#374151;font-size:14px;line-height:1.6;">' + abertura + '</p>' +
+    textoParaHtml(modelo.saudacao, vars, 'margin:0 0 14px;color:#111827;font-size:15px;') +
+    textoParaHtml(t.abertura, vars, 'margin:0 0 20px;color:#374151;font-size:14px;line-height:1.6;') +
     cartoes +
-    '<p style="margin:6px 0 0;color:#5b6475;font-size:12.5px;">' + (incluido ? 'Incluído' : 'Analisado') + ' por <b style="color:#374151;">' + escHtml(atendente) + '</b>' + (quando ? ' em ' + escHtml(quando) : '') + '.</p>' +
-    '<p style="margin:18px 0 0;color:#374151;font-size:14px;line-height:1.6;">' + fechamento + '</p>' +
-    '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 0;"><tr><td style="border-radius:8px;background:#2563eb;">' +
-    '<a href="' + URL_APP + '" style="display:inline-block;padding:11px 20px;color:#ffffff;font-size:13.5px;font-weight:600;text-decoration:none;">Abrir o Gerador de Minutas</a>' +
-    '</td></tr></table>' +
+    textoParaHtml(t.linhaAtendente, vars, 'margin:6px 0 0;color:#5b6475;font-size:12.5px;') +
+    textoParaHtml(t.fechamento, vars, 'margin:18px 0 0;color:#374151;font-size:14px;line-height:1.6;') +
+    (modelo.botao.mostrar && String(modelo.botao.texto).trim()
+      ? '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 0;"><tr><td style="border-radius:8px;background:#2563eb;">' +
+        '<a href="' + URL_APP + '" style="display:inline-block;padding:11px 20px;color:#ffffff;font-size:13.5px;font-weight:600;text-decoration:none;">' + escHtml(preencherVars(modelo.botao.texto, vars)) + '</a>' +
+        '</td></tr></table>'
+      : '') +
     assinatura +
     '</td></tr>' +
-    '<tr><td style="background:#f8fafc;border-top:1px solid #e3e7ee;padding:14px 28px;color:#8a93a3;font-size:11.5px;line-height:1.5;">' +
-    'Mensagem automática enviada pelo Gerador de Minutas · ' + escHtml(EMAIL_ASSINATURA.empresa) + '. ' +
-    'Você recebe este aviso porque fez um pedido de envio com o usuário <b>@' + escHtml(dono.usuario) + '</b>.' +
-    '</td></tr>' +
+    (String(modelo.rodape).trim()
+      ? '<tr><td style="background:#f8fafc;border-top:1px solid #e3e7ee;padding:14px 28px;">' + textoParaHtml(modelo.rodape, vars, 'margin:0;color:#8a93a3;font-size:11.5px;line-height:1.5;') + '</td></tr>'
+      : '') +
     '</table></td></tr></table></body></html>';
 
-  const texto = [
-    'Olá, ' + primeiroNome(dono.nome) + ',', '',
-    abertura.replace(/<[^>]+>/g, ''), ''
-  ].concat(pedidos.map(function (p) {
-    return [
-      '[' + selo + ']' + (incluido ? ' Minuta nº ' + p.minuta : ''),
-      'De: ' + p.de, 'Para: ' + p.para, 'Quantidade: ' + p.qtd + ' · ' + p.conteudo,
-      p.obs ? 'Observação: ' + p.obs : '', 'Pedido em: ' + p.criadoEm,
-      incluido ? '' : 'Motivo: ' + (p.motivo || 'Não informado'), ''
-    ].filter(function (x, i, a) { return x !== '' || i === a.length - 1; }).join('\n');
-  })).concat([
-    (incluido ? 'Incluído' : 'Analisado') + ' por ' + atendente + (quando ? ' em ' + quando : '') + '.', '',
-    fechamento, '', 'Gerador de Minutas: ' + URL_APP, '',
-    'Atenciosamente,', EMAIL_ASSINATURA.nome, EMAIL_ASSINATURA.cargo, EMAIL_ASSINATURA.empresa
-  ]).concat(EMAIL_ASSINATURA.contato ? [EMAIL_ASSINATURA.contato] : []).join('\n');
+  const blocosTexto = [textoParaTexto(modelo.saudacao, vars), textoParaTexto(t.abertura, vars)]
+    .concat(pedidos.map(function (p) {
+      return (selo ? '[' + selo + ']\n' : '') + detalhes(p).map(function (d) { return d[0] + ': ' + d[1]; }).join('\n');
+    }))
+    .concat([textoParaTexto(t.linhaAtendente, vars), textoParaTexto(t.fechamento, vars),
+      modelo.botao.mostrar && String(modelo.botao.texto).trim() ? preencherVars(modelo.botao.texto, vars) + ': ' + URL_APP : '',
+      [textoParaTexto(modelo.despedida, vars)].concat(linhasAss.map(function (l) { return l.replace(/\*\*(.+?)\*\*/g, '$1'); })).filter(String).join('\n'),
+      textoParaTexto(modelo.rodape, vars)]);
+  const texto = blocosTexto.map(function (b) { return String(b || '').trim(); }).filter(String).join('\n\n');
 
   return { assunto: assunto, html: html, texto: texto };
 }
 
 // Rode esta função UMA VEZ pelo editor (Executar) para autorizar o envio de e-mails.
-// Manda para a sua própria conta um exemplo de "incluído" e um de "recusado".
+// Manda para a sua própria conta um exemplo de "incluído" e um de "recusado", com o modelo salvo.
 function testarEmail() {
-  const para = Session.getEffectiveUser().getEmail();
-  const agora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
-  const dono = { usuario: 'teste', nome: 'Teste do Gerador', email: para };
-  const quem = { nome: 'Expedição', email: '' };
-  const base = { criadoEm: agora, de: 'Mariana - Expedição', para: 'Sheila - Recepção', qtd: 1, conteudo: 'Envelope', obs: 'Entregar em mãos', atendidoEm: agora };
-  [['incluido', { minuta: '000123' }], ['recusado', { motivo: 'Vai pelo correio nesta semana.' }]].forEach(function (c) {
-    const p = Object.assign({}, base, c[1]);
-    const msg = montarEmailPedido(c[0], dono, [p], quem);
-    MailApp.sendEmail(para, '[TESTE] ' + msg.assunto, msg.texto, { name: EMAIL_NOME_REMETENTE, htmlBody: msg.html });
-  });
-  console.log('Dois e-mails de teste enviados para ' + para + '. Cota restante hoje: ' + MailApp.getRemainingDailyQuota());
+  const r = testeEmail({}, { usuario: 'teste', nome: 'Teste do Gerador', email: Session.getEffectiveUser().getEmail() });
+  console.log('Dois e-mails de teste enviados para ' + r.para + '. Cota restante hoje: ' + r.cota);
 }
