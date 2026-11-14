@@ -49,14 +49,28 @@ Permissões: *Histórico*, *Frete cortesia*, *Configurações* (acessar) e *Cria
 - No programa do Windows, o login vale quando o Google Sheets está configurado. Sem URL do Google (só planilha local), ele abre sem login.
 
 ## Pedidos de envio
-Quem tem a permissão **Pedir envios** (o perfil Consulta tem) abre **Pedidos**, informa de quem para quem vai o envio, quantidade, conteúdo e observação, e envia.
+Quem tem a permissão **Pedir envios** (o perfil Consulta tem) abre **Envio** (Alt+4), informa de quem para quem vai o envio, quantidade, conteúdo e observação, e envia.
 
-- Quem cria minutas é avisado: contador em **Pedidos** no menu, faixa amarela na **Nova minuta** e aviso na tela (e notificação do sistema, se ativar "Avisar com o app minimizado"). O app confere a cada minuto.
+- Quem cria minutas é avisado: contador em **Envio** no menu, faixa amarela na **Nova minuta** e aviso na tela (e notificação do sistema, se ativar "Avisar com o app minimizado"). O app confere a cada minuto.
 - Em **Ver e incluir**, marque os pedidos e clique em **Incluir no malote**: eles viram itens da minuta aberta (marcados como *pedido*).
 - Ao **gerar o PDF** ou **registrar**, o pedido fica **incluído** com o número da minuta, e quem pediu é avisado. Excluir a minuta devolve o pedido para *aguardando*.
 - Quem pediu pode cancelar enquanto o pedido aguarda; quem monta o malote pode recusar, com um motivo que a pessoa vê.
 - Pedidos **recusados** ou **cancelados** podem ser excluídos por quem tem a permissão **Excluir pedidos** (o Administrador tem; para outros, marque no perfil Personalizado).
 - Os pedidos ficam na aba **Pedidos** da planilha.
+
+## Atalhos de teclado (v2.8)
+Os atalhos não usam teclas que o navegador já usa. Lista completa no app em **Atalhos** (Alt+A).
+
+| Ação | Tecla | | Ação | Tecla |
+|---|---|---|---|---|
+| Nova minuta / Histórico / Configurações / Envio | Alt+1 / 2 / 3 / 4 | | Adicionar item | F2 |
+| Nova minuta (limpar) | Alt+N | | Adicionar volume | Alt+V |
+| Gerar PDF | Ctrl+S | | Editar remetente | F4 |
+| Registrar na planilha | Ctrl+Shift+S | | Editar destinatário | F9 |
+| Imprimir | Ctrl+P | | Buscar no histórico | Alt+B |
+| Visualizar | Alt+P | | Focar busca / número | Alt+L |
+
+No programa do Windows as teclas antigas (F1, F3, F5, F6, F7, Ctrl+N, Ctrl+F, Ctrl+L, Ctrl+D) continuam funcionando.
 
 ## Publicar no GitHub Pages (uma vez só)
 **Settings → Pages** → *Build and deployment*: Source = **Deploy from a branch**, Branch = **main** / **(root)** → **Save**.

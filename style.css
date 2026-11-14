@@ -430,6 +430,7 @@ select { appearance: none; padding-right: 32px; cursor: pointer;
 
 /* Atalhos */
 .shortcut-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+.shortcut-nota { grid-column: 1 / -1; margin: 0; }
 .shortcut-list > div:not(.shortcut-group) { display: flex; align-items: center; gap: 4px; padding: 7px 0; border-bottom: 1px solid var(--border); }
 .shortcut-list > div span { flex: 1; color: var(--text-2); }
 .shortcut-group { font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-2); margin: 14px 0 4px; }

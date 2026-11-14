@@ -17,7 +17,7 @@
 
   // ---------- Marcação ----------
   document.querySelector('.sb-nav [data-go="frete"]')?.insertAdjacentHTML('afterend',
-    '<button class="nav" data-go="pedidos" data-ico="inbox"><span>Pedidos</span><b class="nav-badge" id="pedBadge" hidden></b></button>');
+    '<button class="nav" data-go="pedidos" data-ico="inbox"><span>Envio</span><kbd>Alt 4</kbd><b class="nav-badge" id="pedBadge" hidden></b></button>');
 
   document.querySelector('#v-nova > header')?.insertAdjacentHTML('afterend', `
     <div class="ped-banner" id="pedBanner" hidden>
@@ -30,7 +30,7 @@
   document.querySelector('main.content')?.insertAdjacentHTML('beforeend', `
     <section id="v-pedidos" class="view">
       <header class="vh">
-        <div class="vh-title"><div><span class="eyebrow">Operação</span><h2>Pedidos de envio</h2></div></div>
+        <div class="vh-title"><div><span class="eyebrow">Operação</span><h2>Envio</h2></div></div>
         <div class="vh-actions"><button class="ghost" id="pedAtualizar" type="button" data-ico="refresh"><span>Atualizar</span></button></div>
       </header>
       <div class="ped-grid">
@@ -38,11 +38,11 @@
           <div class="card-h"><h3 data-ico="send">Novo pedido</h3></div>
           <p class="hint ped-hint">Diga de quem para quem vai o envio. Quem monta o malote recebe o aviso e inclui o seu pedido.</p>
           <div class="fgrid">
-            <label class="field span2"><span>Quem está enviando</span><input id="pedDe" list="pessoasList" maxlength="80" autocomplete="off" placeholder="Ex.: Mariana - Expedição" /></label>
-            <label class="field span2"><span>Para quem vai</span><input id="pedPara" list="destinosList" maxlength="80" autocomplete="off" placeholder="Ex.: Sheila - Recepção" /></label>
-            <label class="field"><span>Quantidade</span><input id="pedQtd" type="number" min="1" max="999" value="1" /></label>
-            <label class="field"><span>Conteúdo</span><select id="pedConteudo">${CONTEUDOS.map((c) => `<option>${c}</option>`).join('')}</select></label>
-            <label class="field span2"><span>Observação <i>(opcional)</i></span><textarea id="pedObs" rows="2" maxlength="200" placeholder="Ex.: entregar em mãos, frágil, urgente…"></textarea></label>
+            <label class="field span2"><span>Quem está enviando</span><input id="pedDe" list="pessoasList" maxlength="80" autocomplete="off" title="Nome e setor de quem está mandando o envio (ex.: Mariana - Expedição). Comece a digitar para ver os nomes já usados." /></label>
+            <label class="field span2"><span>Para quem vai</span><input id="pedPara" list="destinosList" maxlength="80" autocomplete="off" title="Nome e setor de quem vai receber (ex.: Sheila - Recepção). Comece a digitar para ver os nomes já usados." /></label>
+            <label class="field"><span>Quantidade</span><input id="pedQtd" type="number" min="1" max="999" value="1" title="Quantos volumes ou itens vão neste envio (de 1 a 999)" /></label>
+            <label class="field"><span>Conteúdo</span><select id="pedConteudo" title="Tipo do que vai ser enviado: envelope, pacote, caixa ou outros">${CONTEUDOS.map((c) => `<option>${c}</option>`).join('')}</select></label>
+            <label class="field span2"><span>Observação <i>(opcional)</i></span><textarea id="pedObs" rows="2" maxlength="200" title="Informação extra para quem monta o malote, como: entregar em mãos, frágil ou urgente. Opcional."></textarea></label>
           </div>
           <div class="btn-row ped-enviar"><button class="primary" id="pedEnviar" type="button" data-ico="send"><span>Enviar pedido</span></button></div>
         </section>
@@ -71,7 +71,7 @@
       <div class="m-head"><h3 id="pedRecTitulo">Recusar pedido</h3><button class="ghost sm icon-btn" data-close type="button" title="Fechar" data-ico="close"><span class="sr">Fechar</span></button></div>
       <div class="m-body">
         <p id="pedRecResumo"></p>
-        <label class="field"><span>Motivo <i>(a pessoa que pediu vai ver)</i></span><textarea id="pedRecMotivo" rows="3" maxlength="200" placeholder="Ex.: vai pelo correio, já foi enviado ontem…"></textarea></label>
+        <label class="field"><span>Motivo <i>(a pessoa que pediu vai ver)</i></span><textarea id="pedRecMotivo" rows="3" maxlength="200" title="Explique por que o pedido foi recusado, como: vai pelo correio ou já foi enviado. A pessoa que pediu vai ver este texto."></textarea></label>
       </div>
       <div class="m-foot"><button class="ghost" data-close type="button">Voltar</button><button class="danger-primary" id="pedRecConfirmar" type="button">Recusar pedido</button></div>
     </div></div>`);

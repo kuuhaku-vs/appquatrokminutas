@@ -12,8 +12,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" /><meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Minutas 4K" /><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <script>try{if(localStorage.getItem('gm-tema')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
-<link rel="stylesheet" href="style.css?v=20261113-1700" />
-<link rel="stylesheet" href="auth.css?v=20261113-1700" />
+<link rel="stylesheet" href="style.css?v=20261114-1700" />
+<link rel="stylesheet" href="auth.css?v=20261114-1700" />
 </head>
 <body>
 
@@ -59,10 +59,10 @@
         <div><strong id="sbSheetsText">Google Sheets</strong><small id="sbSheetsSub"></small></div>
       </div>
       <div class="sb-tools">
-        <button class="sb-tool" id="btnAtalhos" title="Atalhos de teclado (F1)" data-ico="keyboard"><span>Atalhos</span></button>
+        <button class="sb-tool" id="btnAtalhos" title="Atalhos de teclado (Alt+A)" data-ico="keyboard"><span>Atalhos</span></button>
         <button class="sb-tool sb-tool-icon" id="btnTema" title="Alternar tema"></button>
       </div>
-      <div class="sb-version">v2.7 · Grupo Quatro K</div>
+      <div class="sb-version">v2.8 · Grupo Quatro K</div>
     </div>
   </aside>
 
@@ -81,15 +81,15 @@
         <div class="doc-id">
           <span class="eyebrow">Minuta de despacho</span>
           <div class="doc-line">
-            <label class="doc-num" title="Número da minuta (Ctrl+L)"><span>Nº</span><input id="numero" aria-label="Número da minuta" autocomplete="off" /></label>
+            <label class="doc-num" title="Número da minuta (Alt+L)"><span>Nº</span><input id="numero" aria-label="Número da minuta" autocomplete="off" /></label>
             <label class="date-chip" title="Data da minuta" data-ico="calendar"><input id="data" type="date" aria-label="Data" /></label>
             <div id="draftStatus" class="draft-status">● Rascunho salvo automaticamente</div>
           </div>
         </div>
         <div class="vh-actions">
-          <button class="ghost" id="btnNova" title="Nova minuta (Ctrl+N)" data-ico="plus"><span>Nova</span></button>
+          <button class="ghost" id="btnNova" title="Nova minuta (Alt+N)" data-ico="plus"><span>Nova</span></button>
           <span class="vh-sep"></span>
-          <button class="ghost" id="btnVer" title="Visualizar (F6)" data-ico="eye"><span>Visualizar</span></button>
+          <button class="ghost" id="btnVer" title="Visualizar (Alt+P)" data-ico="eye"><span>Visualizar</span></button>
           <button class="ghost" id="btnImprimir" title="Imprimir (Ctrl+P)" data-ico="printer"><span>Imprimir</span></button>
           <button class="ghost" id="btnCSV" title="Registrar apenas na planilha (Ctrl+Shift+S)" data-ico="table"><span>Registrar</span></button>
           <button class="primary" id="btnPDF" title="Gerar PDF e registrar (Ctrl+S)" data-ico="file"><span>Gerar PDF</span></button>
@@ -118,7 +118,7 @@
                 <div class="party-top">
                   <span class="party-role dest" data-ico="flag">Destinatário</span>
                   <div class="party-actions">
-                    <button class="mini party-edit" data-edit="destinatario" title="Editar destinatário (F5)" data-ico="edit"><span>Editar</span></button>
+                    <button class="mini party-edit" data-edit="destinatario" title="Editar destinatário (F9)" data-ico="edit"><span>Editar</span></button>
                     <button class="mini party-toggle" data-party-toggle="destinatario" aria-expanded="false" data-ico="chevron"><span>Detalhes</span></button>
                   </div>
                 </div>
@@ -130,9 +130,9 @@
 
           <!-- Volumes -->
           <section class="card packaging">
-            <div class="card-h"><h3 data-ico="package">Volumes e embalagens</h3><kbd class="kbd-soft">F3</kbd></div>
+            <div class="card-h"><h3 data-ico="package">Volumes e embalagens</h3><kbd class="kbd-soft">Alt V</kbd></div>
             <div class="pack-form">
-              <label class="field"><span>Qtd.</span><input id="qtdEmbalagem" type="number" min="1" step="1" value="1" /></label>
+              <label class="field"><span>Qtd.</span><input id="qtdEmbalagem" type="number" min="1" step="1" value="1" title="Quantidade de volumes deste tipo (somente números). Enter passa para o tipo; Enter de novo adiciona." /></label>
               <label class="field grow"><span>Tipo</span><select id="tipoEmbalagem"><option>Malote</option><option>Caixa</option><option>Envelope</option><option>Pacote</option><option>Outro</option></select></label>
               <button class="primary icon-btn" id="addEmbalagem" title="Adicionar volume" data-ico="plus"><span class="sr">Adicionar</span></button>
             </div>
@@ -386,7 +386,7 @@
       </section>
       <aside class="cad-editor">
         <span class="sub-title">Informações do cadastro</span>
-        <label class="field"><span>Nome / Setor</span><input id="cadPessoaNome" placeholder="Ex.: Mariana - Expedição" autocomplete="off" /></label>
+        <label class="field"><span>Nome / Setor</span><input id="cadPessoaNome" title="Nome da pessoa e setor, separados por hífen (ex.: Mariana - Expedição)" autocomplete="off" /></label>
         <input id="cadPessoaRem" type="checkbox" checked hidden><input id="cadPessoaDest" type="checkbox" checked hidden>
         <span class="field-label">Tipo de uso</span>
         <div class="seg full">
@@ -394,7 +394,7 @@
           <button class="cad-type active" data-cad-type="dest" type="button">Dest. / Setor</button>
           <button class="cad-type" data-cad-type="ambos" type="button">Ambos</button>
         </div>
-        <label class="field"><span>Observação <i>(opcional)</i></span><textarea id="cadPessoaObs" maxlength="100" rows="3" placeholder="Ex.: setor da embalagem, telefone…"></textarea></label>
+        <label class="field"><span>Observação <i>(opcional)</i></span><textarea id="cadPessoaObs" maxlength="100" rows="3" title="Informação extra sobre a pessoa, como setor ou telefone. Opcional."></textarea></label>
         <button class="primary" id="cadPessoaSalvar" type="button" data-ico="save"><span>Salvar</span></button>
         <div class="note" data-ico="info"><span>Os cadastros ficam neste computador e também aprendem com os itens que você usa. Não vão para a planilha.</span></div>
       </aside>
@@ -458,7 +458,7 @@
   <div class="m-head"><h3>Adicionar vários itens</h3><button class="ghost sm icon-btn" data-close title="Fechar" data-ico="close"><span class="sr">Fechar</span></button></div>
   <div class="m-body">
     <p class="hint">Uma linha por item, no formato <code>Remetente | Destino | Quantidade | Conteúdo | Observação</code></p>
-    <textarea id="itensLoteTexto" class="mono" rows="10" placeholder="Mariana | Expedição | 1 | Envelope | Urgente&#10;Eduardo | Laboratório | 2 | Caixa |"></textarea>
+    <textarea id="itensLoteTexto" class="mono" rows="10" title="Escreva um item por linha: Remetente | Destino | Quantidade | Conteúdo | Observação (a observação é opcional)"></textarea>
   </div>
   <div class="m-foot"><button class="ghost" data-close>Cancelar</button><button class="primary" id="btnProcessarLote">Adicionar itens</button></div>
 </div></div>
@@ -479,43 +479,43 @@
       <div><span>Nova minuta</span><kbd>Alt</kbd><kbd>1</kbd></div>
       <div><span>Histórico</span><kbd>Alt</kbd><kbd>2</kbd></div>
       <div><span>Configurações</span><kbd>Alt</kbd><kbd>3</kbd></div>
-      <div><span>Abrir atalhos</span><kbd>F1</kbd></div>
+      <div><span>Envio</span><kbd>Alt</kbd><kbd>4</kbd></div>
+      <div><span>Abrir atalhos</span><kbd>Alt</kbd><kbd>A</kbd></div>
       <div><span>Abrir histórico</span><kbd>F8</kbd></div>
       <div class="shortcut-group">Minuta</div>
-      <div><span>Nova minuta</span><kbd>Ctrl</kbd><kbd>N</kbd></div>
+      <div><span>Nova minuta</span><kbd>Alt</kbd><kbd>N</kbd></div>
       <div><span>Gerar PDF</span><kbd>Ctrl</kbd><kbd>S</kbd></div>
       <div><span>Registrar na planilha</span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>S</kbd></div>
       <div><span>Imprimir</span><kbd>Ctrl</kbd><kbd>P</kbd></div>
-      <div><span>Visualizar minuta</span><kbd>F6</kbd></div>
-      <div><span>Gerar PDF</span><kbd>F7</kbd></div>
+      <div><span>Visualizar minuta</span><kbd>Alt</kbd><kbd>P</kbd></div>
     </div>
     <div class="shortcut-list">
       <div class="shortcut-group">Preenchimento</div>
       <div><span>Adicionar item</span><kbd>F2</kbd></div>
-      <div><span>Adicionar volume</span><kbd>F3</kbd></div>
+      <div><span>Adicionar volume</span><kbd>Alt</kbd><kbd>V</kbd></div>
       <div><span>Editar remetente</span><kbd>F4</kbd></div>
-      <div><span>Editar destinatário</span><kbd>F5</kbd></div>
+      <div><span>Editar destinatário</span><kbd>F9</kbd></div>
       <div><span>Avançar / adicionar</span><kbd>Enter</kbd></div>
       <div><span>Confirmar a janela atual</span><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
       <div class="shortcut-group">Histórico e geral</div>
-      <div><span>Buscar no histórico</span><kbd>Ctrl</kbd><kbd>F</kbd></div>
-      <div><span>Focar busca / número</span><kbd>Ctrl</kbd><kbd>L</kbd></div>
-      <div><span>Editar destinatário</span><kbd>Ctrl</kbd><kbd>D</kbd></div>
+      <div><span>Buscar no histórico</span><kbd>Alt</kbd><kbd>B</kbd></div>
+      <div><span>Focar busca / número</span><kbd>Alt</kbd><kbd>L</kbd></div>
       <div><span>Fechar janela</span><kbd>Esc</kbd></div>
     </div>
+    <p class="hint shortcut-nota">Os atalhos não usam mais teclas do navegador (F5, Ctrl+N, Ctrl+F, Ctrl+D…). No programa do Windows as teclas antigas continuam funcionando.</p>
   </div>
 </div></div>
 
 <div id="toast"></div>
-<script src="config.js?v=20261113-1700"></script>
-<script src="web-api.js?v=20261113-1700"></script>
-<script src="ui.js?v=20261113-1700"></script>
-<script src="logo.js?v=20261113-1700"></script>
-<script src="print.js?v=20261113-1700"></script>
-<script src="frete-cortesia.js?v=20261113-1700"></script>
+<script src="config.js?v=20261114-1700"></script>
+<script src="web-api.js?v=20261114-1700"></script>
+<script src="ui.js?v=20261114-1700"></script>
+<script src="logo.js?v=20261114-1700"></script>
+<script src="print.js?v=20261114-1700"></script>
+<script src="frete-cortesia.js?v=20261114-1700"></script>
 <!-- O app.js é carregado pelo auth.js depois do login. -->
-<script src="auth.js?v=20261113-1700" data-app="app.js?v=20261113-1700"></script>
-<script src="pedidos.js?v=20261113-1700"></script>
+<script src="auth.js?v=20261114-1700" data-app="app.js?v=20261114-1700"></script>
+<script src="pedidos.js?v=20261114-1700"></script>
 <script>if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 </body>
 </html>

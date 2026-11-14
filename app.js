@@ -1118,17 +1118,80 @@ function executarAcaoPrincipal() {
   return false;
 }
 function navegarComAlt(n) {
-  const mapa = { '1':'nova', '2':'historico', '3':'config' };
-  if (mapa[n]) { go(mapa[n]); return true; }
-  return false;
+  const mapa = { '1':'nova', '2':'historico', '3':'config', '4':'pedidos' };
+  const destino = mapa[n];
+  if (!destino) return false;
+  const nav = document.querySelector(`.nav[data-go="${destino}"]`);
+  if (!nav || nav.offsetParent === null) return false; // tela não existe ou não está liberada para este usuário
+  go(destino);
+  return true;
 }
 function atalhoExecutar(id) { const el = $(id); if (el && !el.disabled && getComputedStyle(el).display !== 'none') { el.click(); return true; } return false; }
 
+/* Atalhos (v2.8): sem conflito com o navegador.
+   Saíram do padrão as teclas que o Chrome/Edge usam: F1 (ajuda), F3 (localizar), F5 (recarregar),
+   F6 (barra de endereço), F7 (navegação por cursor), Ctrl+N (janela nova, não dá para bloquear),
+   Ctrl+F (localizar), Ctrl+L (barra de endereço) e Ctrl+D (favoritos).
+   No programa do Windows essas teclas antigas continuam funcionando, porque lá não há conflito. */
+const APP_DESKTOP = /Electron/i.test(navigator.userAgent || '');
+const naNova = () => !!document.querySelector('#v-nova.active');
+const ACOES_ATALHO = {
+  atalhos: () => { if (modalAtual()) fecharUltimoModal(); else abrirModal($('mAtalhos')); },
+  historico: () => { if (!modalAtual()) go('historico'); },
+  nova: () => atalhoExecutar('btnNova'),
+  imprimir: () => { if (!modalAtual()) atalhoExecutar('btnImprimir'); },
+  registrar: () => { if (!modalAtual()) atalhoExecutar('btnCSV'); },
+  pdf: () => {
+    if (modalAtual()) { if (!executarAcaoPrincipal()) toast('Feche a janela atual ou use Ctrl+Enter para confirmar.', true); }
+    else atalhoExecutar('btnPDF');
+  },
+  visualizar: () => { if (!modalAtual() && naNova()) atalhoExecutar('btnVer'); },
+  item: () => { if (!modalAtual()) atalhoExecutar('addItem'); },
+  volume: () => { if (!modalAtual()) { $('qtdEmbalagem')?.focus(); $('qtdEmbalagem')?.select(); } },
+  remetente: () => { if (!modalAtual() && naNova()) atalhoExecutar('btnEditRemetente'); },
+  destinatario: () => { if (!modalAtual() && naNova()) atalhoExecutar('btnEditDestinatario'); },
+  buscar: () => {
+    if (document.querySelector('#v-historico.active')) $('busca')?.focus();
+    else { go('historico'); setTimeout(() => $('busca')?.focus(), 30); }
+  },
+  focarNumero: () => {
+    if (document.querySelector('#v-historico.active')) $('busca')?.focus();
+    else if (naNova()) $('numero')?.focus();
+  },
+};
+// Combinação → ação. Formato: [ctrl][shift][alt]+código da tecla (KeyboardEvent.code).
+const ATALHOS = {
+  'alt+KeyA': 'atalhos',
+  'F8': 'historico',
+  'alt+KeyN': 'nova',
+  'ctrl+KeyP': 'imprimir',
+  'ctrl+KeyS': 'pdf',
+  'ctrl+shift+KeyS': 'registrar',
+  'alt+KeyP': 'visualizar',
+  'F2': 'item',
+  'alt+KeyV': 'volume',
+  'F4': 'remetente',
+  'F9': 'destinatario',
+  'alt+KeyB': 'buscar',
+  'alt+KeyL': 'focarNumero',
+};
+// Teclas antigas: só no programa do Windows.
+const ATALHOS_DESKTOP = {
+  'F1': 'atalhos', 'F3': 'volume', 'F5': 'destinatario', 'F6': 'visualizar', 'F7': 'pdf',
+  'ctrl+KeyN': 'nova', 'ctrl+KeyF': 'buscar', 'ctrl+KeyL': 'focarNumero', 'ctrl+KeyD': 'destinatario',
+};
+function comboDoEvento(e) {
+  const p = [];
+  if (e.ctrlKey || e.metaKey) p.push('ctrl');
+  if (e.shiftKey) p.push('shift');
+  if (e.altKey) p.push('alt');
+  p.push(e.code || '');
+  return p.join('+');
+}
+
 document.addEventListener('keydown', (e) => {
   if (e.isComposing) return;
-  const key = String(e.key || '').toLowerCase();
   const mod = e.ctrlKey || e.metaKey;
-  const modal = modalAtual();
 
   // Escape sempre fecha a janela/modal mais acima.
   if (e.key === 'Escape') {
@@ -1136,105 +1199,27 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Atalhos de confirmação/ação dentro de modais.
+  // Ctrl+Enter confirma a janela aberta.
   if (mod && e.key === 'Enter') {
     if (executarAcaoPrincipal()) e.preventDefault();
     return;
   }
 
-  // F1 abre a central de atalhos.
-  if (e.key === 'F1') {
-    e.preventDefault();
-    if (modal) fecharUltimoModal();
-    else abrirModal($('mAtalhos'));
-    return;
-  }
+  // AltGr (teclado ABNT2) chega como Ctrl+Alt: nunca é atalho, é digitação (/, ?, °…).
+  if (e.ctrlKey && e.altKey) return;
 
-  // F2/F3/F4/F5/F6/F7/F8 são atalhos operacionais rápidos.
-  if (!mod && !e.altKey && e.key === 'F2') {
-    e.preventDefault();
-    if (!modal) atalhoExecutar('addItem');
-    return;
-  }
-  if (!mod && !e.altKey && e.key === 'F3') {
-    e.preventDefault();
-    if (!modal) { $('qtdEmbalagem')?.focus(); $('qtdEmbalagem')?.select(); }
-    return;
-  }
-  if (!mod && !e.altKey && e.key === 'F4') {
-    e.preventDefault();
-    if (!modal && document.querySelector('#v-nova.active')) atalhoExecutar('btnEditRemetente');
-    return;
-  }
-  if (!mod && !e.altKey && e.key === 'F5') {
-    e.preventDefault();
-    if (!modal && document.querySelector('#v-nova.active')) atalhoExecutar('btnEditDestinatario');
-    return;
-  }
-  if (!mod && !e.altKey && e.key === 'F6') {
-    e.preventDefault();
-    if (!modal && document.querySelector('#v-nova.active')) atalhoExecutar('btnVer');
-    return;
-  }
-  if (!mod && !e.altKey && e.key === 'F7') {
-    e.preventDefault();
-    if (!modal && document.querySelector('#v-nova.active')) atalhoExecutar('btnPDF');
-    return;
-  }
-  if (!mod && !e.altKey && e.key === 'F8') {
-    e.preventDefault();
-    if (!modal) go('historico');
-    return;
-  }
-
-  // Navegação entre módulos.
-  if (e.altKey && !mod && navegarComAlt(key)) {
+  // Navegação entre módulos: Alt+1…4.
+  if (e.altKey && !mod && /^Digit[1-4]$/.test(e.code) && navegarComAlt(e.code.slice(-1))) {
     e.preventDefault();
     return;
   }
 
-  if (mod && key === 'n') {
-    e.preventDefault();
-    atalhoExecutar('btnNova');
-    return;
-  }
-  if (mod && key === 'p') {
-    e.preventDefault();
-    if (!modal) atalhoExecutar('btnImprimir');
-    return;
-  }
-  if (mod && e.shiftKey && key === 's') {
-    e.preventDefault();
-    if (!modal) atalhoExecutar('btnCSV');
-    return;
-  }
-  if (mod && key === 's') {
-    e.preventDefault();
-    if (modal) {
-      if (!executarAcaoPrincipal()) toast('Feche a janela atual ou use Ctrl+Enter para confirmar.', true);
-    } else {
-      atalhoExecutar('btnPDF');
-    }
-    return;
-  }
-  if (mod && key === 'f') {
-    e.preventDefault();
-    if (document.querySelector('#v-historico.active')) $('busca')?.focus();
-    else { go('historico'); setTimeout(() => $('busca')?.focus(), 30); }
-    return;
-  }
-  if (mod && key === 'l') {
-    e.preventDefault();
-    if (document.querySelector('#v-historico.active')) $('busca')?.focus();
-    else if (document.querySelector('#v-nova.active')) $('numero')?.focus();
-    return;
-  }
-  if (mod && key === 'd') {
-    // Na Nova Minuta, Ctrl+D leva ao campo de destinatário; não duplica algo por engano.
-    e.preventDefault();
-    if (!modal && document.querySelector('#v-nova.active')) atalhoExecutar('btnEditDestinatario');
-    return;
-  }
+  const combo = comboDoEvento(e);
+  let acao = ATALHOS[combo];
+  if (acao === undefined && APP_DESKTOP) acao = ATALHOS_DESKTOP[combo];
+  if (!acao) return;
+  e.preventDefault();
+  ACOES_ATALHO[acao]?.();
 });
 
 // Clique/teclado: IDs auxiliares para os botões que já existem visualmente.
@@ -1299,7 +1284,7 @@ setTimeout(async () => {
 
 setTimeout(() => {
   const el = $('draftStatus');
-  if (el) el.title = 'F1 atalhos · Ctrl+S PDF · Ctrl+Shift+S planilha · Ctrl+N nova · Ctrl+P imprimir · F2 item · F3 volume · F4 remetente · F5 destinatário · F6 visualizar · F7 PDF · F8 histórico · Esc fechar';
+  if (el) el.title = 'Alt+A atalhos · Ctrl+S PDF · Ctrl+Shift+S planilha · Alt+N nova · Ctrl+P imprimir · F2 item · Alt+V volume · F4 remetente · F9 destinatário · Alt+P visualizar · F8 histórico · Esc fechar';
 }, 1500);
 
 // O app.js agora é carregado depois do login, quando a página já está pronta.

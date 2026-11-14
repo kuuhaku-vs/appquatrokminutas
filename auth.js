@@ -168,7 +168,7 @@
   <div class="m-head"><h3 id="usTitulo">Novo usuário</h3><button class="ghost sm icon-btn" data-close type="button" title="Fechar" data-ico="close"><span class="sr">Fechar</span></button></div>
   <div class="m-body">
     <div class="fgrid">
-      <label class="field"><span>Usuário (para entrar)</span><input id="usUsuario" autocapitalize="none" spellcheck="false" maxlength="30" placeholder="ex.: maria.silva" /></label>
+      <label class="field"><span>Usuário (para entrar)</span><input id="usUsuario" autocapitalize="none" spellcheck="false" maxlength="30" title="Nome usado para entrar no app: sem espaços nem acentos (ex.: maria.silva)" /></label>
       <label class="field"><span>Nome</span><input id="usNome" maxlength="60" placeholder="Como aparece nas minutas" /></label>
       <label class="field"><span id="usSenhaRotulo">Senha</span><input id="usSenha" type="password" autocomplete="new-password" maxlength="100" /></label>
       <div class="field"><span>Situação</span><div class="chips-check"><label><input type="checkbox" id="usAtivo" checked /><span>Usuário ativo (pode entrar)</span></label></div></div>
@@ -466,7 +466,7 @@
         <div><span class="perm-chip${u.perfil === 'admin' ? ' all' : ''}">${esc(nomePerfil(u.perfil))}</span></div>
         <div class="perm-chips">${chipsPermissoes(u)}</div>
         <div class="us-last">Último acesso <b>${esc(u.ultimoAcesso || 'nunca entrou')}</b></div>
-        <div class="us-actions act"><button type="button" data-us-editar="${esc(u.usuario)}" title="Alterar usuário">${ico('edit')}<span>Alterar</span></button>${eu ? '' : `<button type="button" class="del" data-us-excluir="${esc(u.usuario)}" title="Excluir usuário">${ico('trash')}</button>`}</div>
+        <div class="us-actions act"><button type="button" data-us-editar="${esc(u.usuario)}" title="Alterar usuário">${ico('edit')}<span>Alterar</span></button>${eu ? `<button type="button" class="del us-act-vago" tabindex="-1" aria-hidden="true">${ico('trash')}</button>` : `<button type="button" class="del" data-us-excluir="${esc(u.usuario)}" title="Excluir usuário">${ico('trash')}</button>`}</div>
       </div>`;
     }).join('') || '<div class="us-empty">Nenhum usuário.</div>';
   }

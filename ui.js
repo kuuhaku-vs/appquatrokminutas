@@ -128,3 +128,40 @@
   setInterval(verificarPlanilha, 60000);
   window.addEventListener('focus', verificarPlanilha);
 })();
+
+/* Dica ao parar o mouse sobre um campo (v2.8).
+   Campos com title próprio mostram a dica escrita para eles. Nos demais, a dica
+   é montada a partir do rótulo do campo, para todo lugar de digitar explicar o que preencher. */
+(function () {
+  const CAMPOS = 'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]), textarea, select';
+  function rotulo(el) {
+    const lb = el.closest('label') || (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`));
+    let t = '';
+    if (lb) { const sp = lb.querySelector(':scope > span'); t = (sp || lb).textContent || ''; }
+    if (!t) t = el.getAttribute('aria-label') || '';
+    return t.replace(/\s+/g, ' ').trim();
+  }
+  function dica(el) {
+    if (el.dataset.dicaPronta) return;
+    el.dataset.dicaPronta = '1';
+    if (el.title) return;
+    let t = rotulo(el);
+    if (!t) { if (el.placeholder) el.title = el.placeholder; return; }
+    const opcional = /\(opcional\)/i.test(t);
+    t = t.replace(/\((opcional|.*?)\)/gi, (m, g) => (/opcional/i.test(g) ? '' : m)).replace(/\s+/g, ' ').trim();
+    let frase;
+    if (el.tagName === 'SELECT') frase = `Escolha: ${t}`;
+    else if (el.type === 'number') frase = `Preencha: ${t} (somente números)`;
+    else if (el.type === 'date') frase = `Escolha a data: ${t}`;
+    else if (el.type === 'time') frase = `Informe a hora: ${t}`;
+    else if (el.type === 'password') frase = `Digite: ${t}`;
+    else if (el.type === 'search' || el.closest('.search')) frase = el.placeholder || `Digite para buscar`;
+    else frase = `Preencha: ${t}`;
+    if (el.getAttribute('list')) frase += '. Comece a digitar para ver as opções já usadas.';
+    if (opcional) frase += ' (opcional)';
+    el.title = frase;
+  }
+  const alvo = (e) => { const el = e.target && e.target.closest && e.target.closest(CAMPOS); if (el) dica(el); };
+  document.addEventListener('mouseover', alvo, true);
+  document.addEventListener('focusin', alvo, true);
+})();
