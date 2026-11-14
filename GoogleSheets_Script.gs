@@ -60,6 +60,18 @@
  *   • ESQUECI A SENHA DO ADMINISTRADOR: apague as linhas da aba
  *     "Usuarios" (deixe a linha 1) e refaça o primeiro acesso.
  *   • Não edite à mão as colunas "Senha (protegida)" e "Sessão".
+ *
+ *  AVISOS POR E-MAIL (versão 2.8):
+ *   • Quando um pedido de envio é INCLUÍDO numa minuta ou RECUSADO, quem
+ *     fez o pedido recebe um e-mail, se tiver e-mail no cadastro (coluna
+ *     "E-mail" da aba Usuarios, preenchida em Usuários ou em Minha conta).
+ *   • O e-mail sai da conta Google dona deste script. Ajuste o nome, a
+ *     assinatura e o endereço de resposta em EMAIL_* logo abaixo.
+ *   • AUTORIZAR (uma vez, depois de colar esta versão): no editor do Apps
+ *     Script, escolha a função testarEmail na barra de cima e clique em
+ *     Executar. Autorize "Enviar e-mail como você". Chegam dois e-mails de
+ *     exemplo na sua caixa. Depois publique a Nova versão normalmente.
+ *   • Contas Gmail comuns enviam até 100 e-mails por dia; Google Workspace, 1.500.
  * ============================================================
  */
 
@@ -69,11 +81,24 @@ const ABA_MINUTAS = 'Minutas';
 const ABA_ITENS = 'Itens';
 const ABA_USUARIOS = 'Usuarios';
 const ABA_PEDIDOS = 'Pedidos';
-const VERSAO_SCRIPT = '2.7';
+const VERSAO_SCRIPT = '2.8';
+
+// ---------- Avisos por e-mail ----------
+const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
+const EMAIL_NOME_REMETENTE = 'Expedição · Grupo Quatro K'; // nome que aparece como remetente
+const EMAIL_RESPONDER_PARA = '';                           // e-mail para respostas; vazio = e-mail de quem atendeu o pedido (se tiver) ou a conta do script
+const EMAIL_ASSINATURA = {
+  nome: 'Equipe de Expedição',
+  cargo: 'Expedição · Despacho',
+  empresa: 'Grupo Quatro K',
+  contato: ''                                              // ex.: '(47) 0000-0000 · expedicao@quatrok.com.br' (opcional)
+};
+const URL_APP = 'https://kuuhaku-vs.github.io/appquatrokminutas/';
+const URL_LOGO_EMAIL = URL_APP + 'logo.png';
 const CAB_MINUTAS = ['Minuta', 'Data', 'Volumes', 'Embalagem', 'Remetente', 'Destinatário', 'Qtd. itens', 'Pessoas', 'PDF', 'Atualizado em', 'Origem', 'Dados', 'Usuário'];
 const CAB_PEDIDOS = ['ID', 'Criado em', 'Usuário', 'Nome', 'De', 'Para', 'Qtd.', 'Conteúdo', 'Obs.', 'Situação', 'Minuta', 'Atendido por', 'Atendido em', 'Motivo'];
 const MAX_PEDIDOS_ABERTOS = 30; // pedidos aguardando por pessoa
-const CAB_USUARIOS = ['Usuário', 'Nome', 'Perfil', 'Permissões', 'Ativo', 'Senha (protegida)', 'Sessão', 'Criado em', 'Último acesso'];
+const CAB_USUARIOS = ['Usuário', 'Nome', 'Perfil', 'Permissões', 'Ativo', 'Senha (protegida)', 'Sessão', 'Criado em', 'Último acesso', 'E-mail'];
 
 // O que cada usuário pode acessar e alterar. O perfil "admin" tem tudo.
 const PERMISSOES = ['minutas.criar', 'minutas.editar', 'minutas.excluir', 'historico.ver', 'pedidos.criar', 'pedidos.excluir', 'frete.usar', 'cadastros.editar', 'config.acessar', 'usuarios.gerenciar'];
@@ -111,6 +136,7 @@ function doPost(e) {
     const quem = autenticar(req, usuarios);
     if (req.acao === 'auth.eu') return resposta({ ok: true, usuario: publico(quem), sessao: renovarSessao(quem, req.sessao) });
     if (req.acao === 'auth.senha') return resposta(trocarSenha(abaU, quem, req));
+    if (req.acao === 'auth.email') return resposta(trocarEmail(abaU, quem, req));
     if (req.acao === 'pedidos.criar') { exigir(quem, 'pedidos.criar'); return resposta(criarPedido(ss, quem, req)); }
     if (req.acao === 'pedidos.listar') return resposta(listarPedidos(ss, quem));
     if (req.acao === 'pedidos.cancelar') return resposta(cancelarPedido(ss, quem, req));
@@ -358,7 +384,8 @@ function lerUsuarios(abaU) {
     return {
       linha: i + 2, usuario: usuario, nome: String(r[1] || ''), perfil: perfil, permissoes: permissoesEfetivas(perfil, r[3]),
       ativo: situacao === 'SIM' || situacao === '', pendente: situacao === 'PENDENTE', hash: String(r[5] || ''), sv: Number(r[6]) || 1,
-      criadoEm: textoCelula(r[7], ss, 'dd/MM/yyyy HH:mm:ss'), ultimoAcesso: textoCelula(r[8], ss, 'dd/MM/yyyy HH:mm:ss')
+      criadoEm: textoCelula(r[7], ss, 'dd/MM/yyyy HH:mm:ss'), ultimoAcesso: textoCelula(r[8], ss, 'dd/MM/yyyy HH:mm:ss'),
+      email: String(r[9] || '').trim()
     };
   }).filter(function (x) { return x; });
 }
@@ -367,14 +394,14 @@ function gravarUsuario(abaU, u) {
   const linha = u.linha || (abaU.getLastRow() + 1);
   abaU.getRange(linha, 1, 1, CAB_USUARIOS.length).setNumberFormat('@').setValues([[
     u.usuario, u.nome, u.perfil, u.perfil === 'personalizado' ? u.permissoes.join(', ') : '', u.pendente ? 'PENDENTE' : (u.ativo ? 'SIM' : 'NÃO'),
-    u.hash, String(u.sv), u.criadoEm || '', u.ultimoAcesso || ''
+    u.hash, String(u.sv), u.criadoEm || '', u.ultimoAcesso || '', u.email || ''
   ]]);
   u.linha = linha;
   return u;
 }
 
 function publico(u) {
-  return { usuario: u.usuario, nome: u.nome, perfil: u.perfil, permissoes: u.permissoes, ativo: u.ativo !== false, pendente: !!u.pendente, criadoEm: u.criadoEm || '', ultimoAcesso: u.ultimoAcesso || '', legado: !!u.legado };
+  return { usuario: u.usuario, nome: u.nome, perfil: u.perfil, permissoes: u.permissoes, ativo: u.ativo !== false, pendente: !!u.pendente, criadoEm: u.criadoEm || '', ultimoAcesso: u.ultimoAcesso || '', email: u.email || '', legado: !!u.legado };
 }
 
 function exigir(quem, permissao) {
@@ -480,7 +507,7 @@ function primeiroAcesso(ss, abaU, usuarios, req) {
   limparFalhas('primeiro');
   const agora = agoraTexto(ss);
   const u = gravarUsuario(abaU, {
-    usuario: validarNomeUsuario(req.usuario), nome: String(req.nome || '').trim() || 'Administrador', perfil: 'admin', permissoes: PERMISSOES.slice(),
+    usuario: validarNomeUsuario(req.usuario), nome: String(req.nome || '').trim() || 'Administrador', perfil: 'admin', permissoes: PERMISSOES.slice(), email: validarEmail(req.email),
     ativo: true, hash: protegerSenha(validarSenhaNova(req.senha)), sv: 1, criadoEm: agora, ultimoAcesso: agora
   });
   return { ok: true, usuario: publico(u), sessao: criarSessao(u, !!req.lembrar) };
@@ -516,7 +543,7 @@ function pedirCadastro(ss, abaU, usuarios, req) {
   const agora = agoraTexto(ss);
   const u = gravarUsuario(abaU, {
     usuario: nome, nome: String(req.nome || '').trim().slice(0, 60) || nome, perfil: 'consulta', permissoes: permissoesEfetivas('consulta'),
-    ativo: true, pendente: false, hash: protegerSenha(senha), sv: 1, criadoEm: agora, ultimoAcesso: agora
+    email: validarEmail(req.email), ativo: true, pendente: false, hash: protegerSenha(senha), sv: 1, criadoEm: agora, ultimoAcesso: agora
   });
   return { ok: true, usuario: publico(u), sessao: criarSessao(u, !!req.lembrar) };
 }
@@ -531,6 +558,20 @@ function trocarSenha(abaU, quem, req) {
   gravarUsuario(abaU, quem);
   const s = lerSessao(req.sessao);
   return { ok: true, usuario: publico(quem), sessao: criarSessao(quem, !!(s && s.l)) };
+}
+
+function validarEmail(v) {
+  const email = String(v == null ? '' : v).trim().toLowerCase().slice(0, 120);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw erroAcesso('email', 'E-mail inválido: ' + email);
+  return email;
+}
+
+// A própria pessoa informa o e-mail onde quer receber os avisos dos pedidos de envio.
+function trocarEmail(abaU, quem, req) {
+  if (quem.legado) throw erroAcesso('login', 'Entre com usuário e senha primeiro.');
+  quem.email = validarEmail(req.email);
+  gravarUsuario(abaU, quem);
+  return { ok: true, usuario: publico(quem) };
 }
 
 function adminsAtivos(usuarios) { return usuarios.filter(function (x) { return x.ativo && x.perfil === 'admin'; }).length; }
@@ -549,6 +590,7 @@ function salvarUsuario(ss, abaU, usuarios, quem, req) {
 
   const eraAtivo = u.ativo;
   u.nome = String(d.nome == null ? (u.nome || '') : d.nome).trim().slice(0, 60) || nome;
+  if (d.email !== undefined) u.email = validarEmail(d.email);
   u.perfil = PERFIS.hasOwnProperty(String(d.perfil)) ? String(d.perfil) : (u.perfil || 'consulta');
   u.permissoes = permissoesEfetivas(u.perfil, d.permissoes || []);
   u.ativo = d.ativo !== false;
@@ -655,7 +697,8 @@ function cancelarPedido(ss, quem, req) {
   p.atendidoEm = agoraTexto(ss);
   p.motivo = meu ? '' : textoLimpo(req.motivo, 200);
   gravarPedido(dados.aba, p);
-  return { ok: true, pedido: pedidoPublico(p) };
+  const emails = p.situacao === SIT_RECUSADO ? avisarPedidosPorEmail(ss, [p], 'recusado', quem) : 0;
+  return { ok: true, pedido: pedidoPublico(p), emailsEnviados: emails };
 }
 
 // Chamado ao registrar uma minuta: itens que vieram de um pedido marcam o pedido como incluído.
@@ -664,12 +707,15 @@ function marcarPedidosIncluidos(ss, itens, numeroTexto, quem) {
   if (!ids.length) return 0;
   const dados = lerPedidos(ss);
   let n = 0;
+  const novos = []; // só avisa por e-mail na primeira inclusão (regravar a mesma minuta não manda de novo)
   dados.lista.forEach(function (p) {
     if (ids.indexOf(p.id) < 0) return;
     if (p.situacao !== SIT_AGUARDANDO && !(p.situacao === SIT_INCLUIDO && normalizarNumero(p.minuta) === normalizarNumero(numeroTexto))) return;
+    if (p.situacao === SIT_AGUARDANDO) novos.push(p);
     p.situacao = SIT_INCLUIDO; p.minuta = numeroTexto; p.atendidoPor = quem.nome || quem.usuario || ''; p.atendidoEm = agoraTexto(ss); p.motivo = '';
     gravarPedido(dados.aba, p); n++;
   });
+  if (novos.length) avisarPedidosPorEmail(ss, novos, 'incluido', quem);
   return n;
 }
 
@@ -694,4 +740,154 @@ function excluirPedidos(ss, req) {
   if (bloqueado) throw erroAcesso('pedido', 'Só dá para excluir pedidos recusados ou cancelados. O pedido ' + bloqueado.de + ' → ' + bloqueado.para + ' está ' + bloqueado.situacao.toLowerCase() + '.');
   alvo.sort(function (a, b) { return b.linha - a.linha; }).forEach(function (p) { dados.aba.deleteRow(p.linha); });
   return { ok: true, excluidos: alvo.length };
+}
+
+
+// ============================================================
+//  AVISOS POR E-MAIL (pedido incluído na minuta ou recusado)
+// ============================================================
+// Um e-mail por pessoa: se vários pedidos dela entram na mesma minuta, vão juntos.
+// Nunca derruba a gravação: qualquer falha no envio fica só no registro de execução.
+function avisarPedidosPorEmail(ss, pedidos, tipo, quem) {
+  if (!EMAIL_ATIVO || !pedidos || !pedidos.length) return 0;
+  let enviados = 0;
+  try {
+    const usuarios = lerUsuarios(obterAba(ss, ABA_USUARIOS, CAB_USUARIOS));
+    const porUsuario = {};
+    pedidos.forEach(function (p) { (porUsuario[p.usuario] = porUsuario[p.usuario] || []).push(p); });
+    Object.keys(porUsuario).forEach(function (login) {
+      const dono = usuarios.filter(function (u) { return u.usuario === login; })[0];
+      if (!dono || !dono.email || dono.ativo === false) return;
+      if (MailApp.getRemainingDailyQuota() < 1) { console.warn('Cota diária de e-mails esgotada.'); return; }
+      const msg = montarEmailPedido(tipo, dono, porUsuario[login], quem);
+      const opcoes = { name: EMAIL_NOME_REMETENTE, htmlBody: msg.html };
+      const responder = EMAIL_RESPONDER_PARA || (quem && quem.email) || '';
+      if (responder) opcoes.replyTo = responder;
+      MailApp.sendEmail(dono.email, msg.assunto, msg.texto, opcoes);
+      enviados++;
+    });
+  } catch (err) {
+    console.error('Aviso por e-mail não enviado: ' + ((err && err.message) || err));
+  }
+  return enviados;
+}
+
+function escHtml(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+}
+
+function primeiroNome(nome) { return String(nome || '').trim().split(/\s+/)[0] || 'colaborador(a)'; }
+
+function montarEmailPedido(tipo, dono, pedidos, quem) {
+  const incluido = tipo === 'incluido';
+  const minuta = pedidos[0].minuta || '';
+  const atendente = (quem && (quem.nome || quem.usuario)) || pedidos[0].atendidoPor || 'Expedição';
+  const quando = pedidos[0].atendidoEm || '';
+  const varios = pedidos.length > 1;
+
+  const assunto = incluido
+    ? (varios ? 'Seus pedidos de envio foram incluídos na minuta nº ' : 'Seu pedido de envio foi incluído na minuta nº ') + minuta
+    : 'Pedido de envio não incluído: ' + pedidos[0].de + ' → ' + pedidos[0].para;
+
+  const abertura = incluido
+    ? (varios
+        ? 'Informamos que os seus pedidos de envio listados abaixo foram incluídos na <b>minuta de despacho nº ' + escHtml(minuta) + '</b> e seguirão no malote correspondente.'
+        : 'Informamos que o seu pedido de envio foi incluído na <b>minuta de despacho nº ' + escHtml(minuta) + '</b> e seguirá no malote correspondente.')
+    : 'Informamos que o seu pedido de envio <b>não pôde ser incluído</b> no malote. Confira abaixo os detalhes e o motivo informado pela Expedição.';
+
+  const fechamento = incluido
+    ? 'Caso precise de alguma alteração, responda a este e-mail ou entre em contato com a equipe de Expedição o quanto antes.'
+    : 'Se ainda for necessário, você pode lançar um novo pedido no Gerador de Minutas ou responder a este e-mail para combinar o envio com a Expedição.';
+
+  const cor = incluido ? '#16794c' : '#b42318';
+  const selo = incluido ? 'INCLUÍDO' : 'RECUSADO';
+
+  const linha = function (rot, val) {
+    if (val === '' || val == null) return '';
+    return '<tr><td style="padding:6px 12px 6px 0;color:#5b6475;font-size:13px;white-space:nowrap;vertical-align:top;">' + escHtml(rot) + '</td>' +
+      '<td style="padding:6px 0;color:#111827;font-size:13px;font-weight:600;vertical-align:top;">' + escHtml(val) + '</td></tr>';
+  };
+  const cartoes = pedidos.map(function (p) {
+    return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e3e7ee;border-radius:10px;margin:0 0 12px;background:#f8fafc;">' +
+      '<tr><td style="padding:14px 16px;">' +
+      '<div style="margin:0 0 8px;"><span style="display:inline-block;padding:3px 10px;border-radius:99px;background:' + cor + ';color:#ffffff;font-size:11px;font-weight:700;letter-spacing:.04em;">' + selo + '</span></div>' +
+      '<table role="presentation" cellpadding="0" cellspacing="0">' +
+      (incluido ? linha('Minuta nº', p.minuta) : '') +
+      linha('De', p.de) + linha('Para', p.para) +
+      linha('Quantidade', p.qtd + ' · ' + p.conteudo) +
+      linha('Observação', p.obs) +
+      linha('Pedido em', p.criadoEm) +
+      (incluido ? '' : linha('Motivo', p.motivo || 'Não informado')) +
+      '</table></td></tr></table>';
+  }).join('');
+
+  const assinatura =
+    '<p style="margin:24px 0 0;color:#111827;font-size:14px;">Atenciosamente,</p>' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:10px;border-left:3px solid #2563eb;"><tr><td style="padding:2px 0 2px 12px;">' +
+    '<div style="font-size:14px;font-weight:700;color:#0f1a33;">' + escHtml(EMAIL_ASSINATURA.nome) + '</div>' +
+    '<div style="font-size:12.5px;color:#5b6475;">' + escHtml(EMAIL_ASSINATURA.cargo) + '</div>' +
+    '<div style="font-size:12.5px;color:#0f1a33;font-weight:600;">' + escHtml(EMAIL_ASSINATURA.empresa) + '</div>' +
+    (EMAIL_ASSINATURA.contato ? '<div style="font-size:12px;color:#5b6475;margin-top:2px;">' + escHtml(EMAIL_ASSINATURA.contato) + '</div>' : '') +
+    '</td></tr></table>';
+
+  const html =
+    '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>' +
+    '<body style="margin:0;padding:0;background:#eef1f6;font-family:Segoe UI,Arial,Helvetica,sans-serif;">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f6;padding:24px 12px;"><tr><td align="center">' +
+    '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e3e7ee;">' +
+    '<tr><td style="background:#0f1a33;padding:22px 28px;">' +
+    '<img src="' + URL_LOGO_EMAIL + '" alt="Grupo Quatro K" width="150" style="display:block;width:150px;max-width:150px;height:auto;border:0;">' +
+    '<div style="margin-top:10px;color:#9fb3d9;font-size:12px;letter-spacing:.08em;text-transform:uppercase;">Expedição · Pedidos de envio</div>' +
+    '</td></tr>' +
+    '<tr><td style="height:4px;background:' + cor + ';line-height:4px;font-size:0;">&nbsp;</td></tr>' +
+    '<tr><td style="padding:28px;">' +
+    '<p style="margin:0 0 14px;color:#111827;font-size:15px;">Olá, ' + escHtml(primeiroNome(dono.nome)) + ',</p>' +
+    '<p style="margin:0 0 20px;color:#374151;font-size:14px;line-height:1.6;">' + abertura + '</p>' +
+    cartoes +
+    '<p style="margin:6px 0 0;color:#5b6475;font-size:12.5px;">' + (incluido ? 'Incluído' : 'Analisado') + ' por <b style="color:#374151;">' + escHtml(atendente) + '</b>' + (quando ? ' em ' + escHtml(quando) : '') + '.</p>' +
+    '<p style="margin:18px 0 0;color:#374151;font-size:14px;line-height:1.6;">' + fechamento + '</p>' +
+    '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 0;"><tr><td style="border-radius:8px;background:#2563eb;">' +
+    '<a href="' + URL_APP + '" style="display:inline-block;padding:11px 20px;color:#ffffff;font-size:13.5px;font-weight:600;text-decoration:none;">Abrir o Gerador de Minutas</a>' +
+    '</td></tr></table>' +
+    assinatura +
+    '</td></tr>' +
+    '<tr><td style="background:#f8fafc;border-top:1px solid #e3e7ee;padding:14px 28px;color:#8a93a3;font-size:11.5px;line-height:1.5;">' +
+    'Mensagem automática enviada pelo Gerador de Minutas · ' + escHtml(EMAIL_ASSINATURA.empresa) + '. ' +
+    'Você recebe este aviso porque fez um pedido de envio com o usuário <b>@' + escHtml(dono.usuario) + '</b>.' +
+    '</td></tr>' +
+    '</table></td></tr></table></body></html>';
+
+  const texto = [
+    'Olá, ' + primeiroNome(dono.nome) + ',', '',
+    abertura.replace(/<[^>]+>/g, ''), ''
+  ].concat(pedidos.map(function (p) {
+    return [
+      '[' + selo + ']' + (incluido ? ' Minuta nº ' + p.minuta : ''),
+      'De: ' + p.de, 'Para: ' + p.para, 'Quantidade: ' + p.qtd + ' · ' + p.conteudo,
+      p.obs ? 'Observação: ' + p.obs : '', 'Pedido em: ' + p.criadoEm,
+      incluido ? '' : 'Motivo: ' + (p.motivo || 'Não informado'), ''
+    ].filter(function (x, i, a) { return x !== '' || i === a.length - 1; }).join('\n');
+  })).concat([
+    (incluido ? 'Incluído' : 'Analisado') + ' por ' + atendente + (quando ? ' em ' + quando : '') + '.', '',
+    fechamento, '', 'Gerador de Minutas: ' + URL_APP, '',
+    'Atenciosamente,', EMAIL_ASSINATURA.nome, EMAIL_ASSINATURA.cargo, EMAIL_ASSINATURA.empresa
+  ]).concat(EMAIL_ASSINATURA.contato ? [EMAIL_ASSINATURA.contato] : []).join('\n');
+
+  return { assunto: assunto, html: html, texto: texto };
+}
+
+// Rode esta função UMA VEZ pelo editor (Executar) para autorizar o envio de e-mails.
+// Manda para a sua própria conta um exemplo de "incluído" e um de "recusado".
+function testarEmail() {
+  const para = Session.getEffectiveUser().getEmail();
+  const agora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
+  const dono = { usuario: 'teste', nome: 'Teste do Gerador', email: para };
+  const quem = { nome: 'Expedição', email: '' };
+  const base = { criadoEm: agora, de: 'Mariana - Expedição', para: 'Sheila - Recepção', qtd: 1, conteudo: 'Envelope', obs: 'Entregar em mãos', atendidoEm: agora };
+  [['incluido', { minuta: '000123' }], ['recusado', { motivo: 'Vai pelo correio nesta semana.' }]].forEach(function (c) {
+    const p = Object.assign({}, base, c[1]);
+    const msg = montarEmailPedido(c[0], dono, [p], quem);
+    MailApp.sendEmail(para, '[TESTE] ' + msg.assunto, msg.texto, { name: EMAIL_NOME_REMETENTE, htmlBody: msg.html });
+  });
+  console.log('Dois e-mails de teste enviados para ' + para + '. Cota restante hoje: ' + MailApp.getRemainingDailyQuota());
 }

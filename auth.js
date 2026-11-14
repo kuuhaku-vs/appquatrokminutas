@@ -65,6 +65,7 @@
   const pode = (p) => S.legado || !!S.usuario?.permissoes?.includes(p);
   const podeTela = (v) => v === 'semacesso' || S.legado || (TELAS[v] || []).some(pode);
   const primeiraTela = () => Object.keys(TELAS).find(podeTela) || 'semacesso';
+  const emailValido = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
   const iniciais = (nome) => String(nome || '?').trim().split(/\s+/).slice(0, 2).map((x) => x[0] || '').join('').toUpperCase() || '?';
   const nomePerfil = (p) => (PERFIS[p] || PERFIS.personalizado).nome;
   function chipsPermissoes(u) {
@@ -131,6 +132,7 @@
       <p class="lg-sub" id="lgSub"></p>
       <label class="field" data-only="primeiro"><span>Código de acesso (o do script do Google)</span><input id="lgCodigo" type="password" autocomplete="off" /></label>
       <label class="field" data-only="novo"><span>Seu nome</span><input id="lgNome" autocomplete="name" maxlength="60" placeholder="Como aparece nas minutas" /></label>
+      <label class="field" data-only="novo"><span>E-mail <i>(opcional)</i></span><input id="lgEmail" type="email" autocomplete="email" maxlength="120" title="E-mail onde você recebe o aviso quando um pedido de envio seu for incluído na minuta ou recusado. Opcional." /></label>
       <label class="field"><span>Usuário</span><input id="lgUsuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" /></label>
       <div class="field"><span>Senha</span>
         <div class="lg-pass"><input id="lgSenha" type="password" autocomplete="current-password" maxlength="100" aria-label="Senha" />
@@ -153,6 +155,13 @@
     <span class="sub-title">O que você pode fazer</span>
     <div class="perm-chips" id="contaPerms"></div>
     <div class="conta-sep"></div>
+    <span class="sub-title">E-mail para avisos</span>
+    <div class="conta-email">
+      <label class="field"><span>E-mail</span><input id="contaEmail" type="email" autocomplete="email" maxlength="120" title="Você recebe um e-mail quando um pedido de envio seu for incluído na minuta ou recusado. Deixe em branco para não receber." /></label>
+      <button class="ghost" id="btnSalvarEmail" type="button">Salvar e-mail</button>
+    </div>
+    <p class="hint">Avisamos neste e-mail quando um pedido de envio seu for incluído na minuta ou recusado.</p>
+    <div class="conta-sep"></div>
     <span class="sub-title">Trocar senha</span>
     <div class="fgrid">
       <label class="field span2"><span>Senha atual</span><input id="contaAtual" type="password" autocomplete="current-password" /></label>
@@ -170,6 +179,7 @@
     <div class="fgrid">
       <label class="field"><span>Usuário (para entrar)</span><input id="usUsuario" autocapitalize="none" spellcheck="false" maxlength="30" title="Nome usado para entrar no app: sem espaços nem acentos (ex.: maria.silva)" /></label>
       <label class="field"><span>Nome</span><input id="usNome" maxlength="60" placeholder="Como aparece nas minutas" /></label>
+      <label class="field span2"><span>E-mail <i>(opcional, para os avisos de pedidos de envio)</i></span><input id="usEmail" type="email" autocomplete="off" maxlength="120" title="E-mail da pessoa. Ela recebe um aviso quando um pedido de envio dela for incluído na minuta ou recusado." /></label>
       <label class="field"><span id="usSenhaRotulo">Senha</span><input id="usSenha" type="password" autocomplete="new-password" maxlength="100" /></label>
       <div class="field"><span>Situação</span><div class="chips-check"><label><input type="checkbox" id="usAtivo" checked /><span>Usuário ativo (pode entrar)</span></label></div></div>
     </div>
@@ -311,6 +321,8 @@
     const primeiro = lg.dataset.modo === 'primeiro', cadastro = lg.dataset.modo === 'cadastro';
     const usuario = campoUsuario.value.trim(), senha = campoSenha.value, lembrar = $('lgLembrar').checked;
     if (cadastro && !$('lgNome').value.trim()) return erroLogin('Digite o seu nome.', $('lgNome'));
+    const email = $('lgEmail').value.trim();
+    if ((primeiro || cadastro) && email && !emailValido(email)) return erroLogin('Confira o e-mail: ele parece incompleto.', $('lgEmail'));
     if (primeiro && !$('lgCodigo').value) return erroLogin('Digite o código de acesso definido no script do Google.', $('lgCodigo'));
     if (!usuario) return erroLogin('Digite o seu usuário.', campoUsuario);
     if (!senha) return erroLogin('Digite a sua senha.');
@@ -321,12 +333,12 @@
     lg.classList.add('is-busy', 'is-pass'); lg.classList.remove('is-peek');
     legenda('Conferindo com a planilha…');
     const r = primeiro
-      ? await api.auth('auth.primeiro', { codigo: $('lgCodigo').value, usuario, nome: $('lgNome').value.trim(), senha, lembrar })
-      : cadastro ? await api.auth('auth.cadastrar', { usuario, nome: $('lgNome').value.trim(), senha, lembrar })
+      ? await api.auth('auth.primeiro', { codigo: $('lgCodigo').value, usuario, nome: $('lgNome').value.trim(), email, senha, lembrar })
+      : cadastro ? await api.auth('auth.cadastrar', { usuario, nome: $('lgNome').value.trim(), email, senha, lembrar })
       : await api.auth('auth.login', { usuario, senha, lembrar });
 
     if (cadastro && r?.ok && !r.sessao) {
-      campoSenha.value = ''; $('lgSenha2').value = ''; $('lgNome').value = '';
+      campoSenha.value = ''; $('lgSenha2').value = ''; $('lgNome').value = ''; $('lgEmail').value = '';
       mostrarLogin('login', 'Cadastro enviado. Você poderá entrar assim que o administrador aprovar.');
       return legenda('Cadastro enviado para aprovação.');
     }
@@ -419,11 +431,23 @@
     $('contaSub').textContent = '@' + u.usuario + ' · ' + nomePerfil(u.perfil);
     $('contaPerms').innerHTML = chipsPermissoes(u);
     ['contaAtual', 'contaNova', 'contaNova2'].forEach((id) => ($(id).value = ''));
+    $('contaEmail').value = u.email || '';
     window.abrirModal?.($('mConta'));
   }
   $('sbUser').addEventListener('click', abrirConta);
   $('mTopUser').addEventListener('click', abrirConta);
   $('btnSair').addEventListener('click', sair);
+  $('btnSalvarEmail').addEventListener('click', async () => {
+    const email = $('contaEmail').value.trim();
+    if (email && !emailValido(email)) return window.toast('Confira o e-mail: ele parece incompleto.', true);
+    const b = $('btnSalvarEmail'); b.disabled = true;
+    const r = await api.auth('auth.email', { email });
+    b.disabled = false;
+    if (!r?.ok) return window.toast(/minuta inválido/i.test(r?.error || '') ? 'O script do Google precisa ser atualizado para a versão 2.8.' : (r?.error || 'Não foi possível salvar o e-mail.'), true);
+    if (r.usuario) { S.usuario = r.usuario; guardar(); }
+    window.dispatchEvent(new CustomEvent('gm-usuario-atualizado'));
+    window.toast(email ? 'E-mail salvo. Você vai receber os avisos dos seus pedidos de envio.' : 'E-mail removido. Você não vai mais receber avisos.');
+  });
   $('btnTrocarSenha').addEventListener('click', async () => {
     const atual = $('contaAtual').value, nova = $('contaNova').value;
     if (!atual || !nova) return window.toast('Preencha a senha atual e a nova senha.', true);
@@ -462,7 +486,7 @@
         <div class="us-actions act"><button type="button" class="ok" data-us-editar="${esc(u.usuario)}" title="Aprovar e escolher o perfil">${ico('check')}<span>Aprovar</span></button><button type="button" class="del" data-us-excluir="${esc(u.usuario)}" title="Recusar o cadastro">${ico('trash')}</button></div>
       </div>`;
       return `<div class="us-row${u.ativo ? '' : ' off'}">
-        <div class="us-who"><span class="avatar">${esc(iniciais(u.nome))}</span><div><strong>${esc(u.nome)}${eu ? ' (você)' : ''}</strong><small>@${esc(u.usuario)}${u.ativo ? '' : ' · desativado'}</small></div></div>
+        <div class="us-who"><span class="avatar">${esc(iniciais(u.nome))}</span><div><strong>${esc(u.nome)}${eu ? ' (você)' : ''}</strong><small>@${esc(u.usuario)}${u.email ? ' · ' + esc(u.email) : ''}${u.ativo ? '' : ' · desativado'}</small></div></div>
         <div><span class="perm-chip${u.perfil === 'admin' ? ' all' : ''}">${esc(nomePerfil(u.perfil))}</span></div>
         <div class="perm-chips">${chipsPermissoes(u)}</div>
         <div class="us-last">Último acesso <b>${esc(u.ultimoAcesso || 'nunca entrou')}</b></div>
@@ -518,7 +542,7 @@
     $('usTitulo').textContent = u?.pendente ? 'Aprovar cadastro' : u ? 'Alterar usuário' : 'Novo usuário';
     $('usSalvar').textContent = u?.pendente ? 'Aprovar e salvar' : 'Salvar usuário';
     $('usUsuario').value = u?.usuario || ''; $('usUsuario').readOnly = !!u;
-    $('usNome').value = u?.nome || ''; $('usSenha').value = '';
+    $('usNome').value = u?.nome || ''; $('usSenha').value = ''; $('usEmail').value = u?.email || '';
     $('usSenhaRotulo').innerHTML = u ? 'Nova senha <i>(em branco mantém a atual)</i>' : 'Senha <i>(mínimo 6 caracteres)</i>';
     $('usAtivo').checked = u ? (u.ativo || u.pendente) : true;
     $('usAtivo').disabled = !!u && u.usuario === S.usuario?.usuario;
@@ -531,8 +555,9 @@
   }
   $('btnNovoUsuario').addEventListener('click', () => abrirUsuario(null));
   $('usSalvar').addEventListener('click', async () => {
-    const dados = { usuario: $('usUsuario').value.trim().toLowerCase(), nome: $('usNome').value.trim(), perfil: perfilMarcado(), permissoes: caixas().filter((c) => c.checked).map((c) => c.dataset.perm), ativo: $('usAtivo').checked };
+    const dados = { usuario: $('usUsuario').value.trim().toLowerCase(), nome: $('usNome').value.trim(), perfil: perfilMarcado(), permissoes: caixas().filter((c) => c.checked).map((c) => c.dataset.perm), ativo: $('usAtivo').checked, email: $('usEmail').value.trim() };
     const senha = $('usSenha').value;
+    if (dados.email && !emailValido(dados.email)) return window.toast('Confira o e-mail: ele parece incompleto.', true);
     if (!dados.usuario) return window.toast('Informe o usuário.', true);
     if (!editando && !senha) return window.toast('Defina uma senha para o novo usuário.', true);
     if (senha && senha.length < 6) return window.toast('A senha precisa ter pelo menos 6 caracteres.', true);

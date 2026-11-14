@@ -37,6 +37,7 @@
         <section class="card" id="pedNovoCard">
           <div class="card-h"><h3 data-ico="send">Novo pedido</h3></div>
           <p class="hint ped-hint">Diga de quem para quem vai o envio. Quem monta o malote recebe o aviso e inclui o seu pedido.</p>
+          <div class="ped-email" id="pedEmailAviso" hidden><span data-ico="mail"></span><span id="pedEmailTxt"></span> <button class="lg-link ped-email-btn" id="pedEmailBtn" type="button"></button></div>
           <div class="fgrid">
             <label class="field span2"><span>Quem está enviando</span><input id="pedDe" list="pessoasList" maxlength="80" autocomplete="off" title="Nome e setor de quem está mandando o envio (ex.: Mariana - Expedição). Comece a digitar para ver os nomes já usados." /></label>
             <label class="field span2"><span>Para quem vai</span><input id="pedPara" list="destinosList" maxlength="80" autocomplete="off" title="Nome e setor de quem vai receber (ex.: Sheila - Recepção). Comece a digitar para ver os nomes já usados." /></label>
@@ -185,7 +186,23 @@
     </div>`;
   }
 
+  // Aviso por e-mail: mostra para onde vai o aviso, ou convida a cadastrar o e-mail.
+  function renderEmail() {
+    const u = window.AUTH?.usuario, box = $('pedEmailAviso');
+    if (!box) return;
+    if (!u || window.AUTH?.legado || !pode('pedidos.criar')) { box.hidden = true; return; }
+    box.hidden = false;
+    box.classList.toggle('sem', !u.email);
+    $('pedEmailTxt').textContent = u.email
+      ? 'Você recebe um e-mail em ' + u.email + ' quando o pedido for incluído na minuta ou recusado.'
+      : 'Cadastre o seu e-mail para ser avisado quando o pedido for incluído na minuta ou recusado.';
+    $('pedEmailBtn').textContent = u.email ? 'Alterar' : 'Cadastrar e-mail';
+  }
+  $('pedEmailBtn')?.addEventListener('click', () => { $('sbUser')?.click(); setTimeout(() => $('contaEmail')?.focus(), 120); });
+  window.addEventListener('gm-usuario-atualizado', renderEmail);
+
   function render() {
+    renderEmail();
     const fila = aguardando(), dentro = naMinuta();
     const feitos = pedidos.filter((p) => p.situacao !== 'AGUARDANDO');
     $('pedListaTitulo').textContent = podeAtender ? 'Aguardando inclusão' : 'Meus pedidos aguardando';

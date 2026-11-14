@@ -163,6 +163,13 @@
 .perm-chip.all { background: var(--accent-soft); border-color: var(--accent-ring); color: var(--accent-2); }
 .perm-chip.wait { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
 .perm-chip.off { background: var(--danger-soft); border-color: transparent; color: var(--danger); }
+.conta-email { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.conta-email .field { margin: 0; }
+.ped-email { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 4px 9px; margin: -4px 0 14px; padding: 9px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--text-2); font-size: 12px; line-height: 1.45; }
+.ped-email.sem { background: var(--warn-soft); }
+.ped-email > :first-child { display: grid; place-items: center; margin-top: 1px; }
+.ped-email svg, .ped-email .ico { width: 15px; height: 15px; }
+.ped-email-btn { grid-column: 2; justify-self: start; font-size: 12px !important; padding: 0 !important; margin: 0 !important; }
 .conta-sep { height: 1px; background: var(--border); margin: 16px 0; }
 .sair-btn { margin-right: auto; color: var(--danger) !important; }
 

@@ -58,6 +58,15 @@ Quem tem a permissão **Pedir envios** (o perfil Consulta tem) abre **Envio** (A
 - Pedidos **recusados** ou **cancelados** podem ser excluídos por quem tem a permissão **Excluir pedidos** (o Administrador tem; para outros, marque no perfil Personalizado).
 - Os pedidos ficam na aba **Pedidos** da planilha.
 
+## Avisos por e-mail (v2.8)
+Quando um pedido de envio é **incluído** numa minuta (ao gerar o PDF ou registrar) ou **recusado**, quem fez o pedido recebe um e-mail corporativo com os detalhes, o motivo (se recusado) e a assinatura da Expedição.
+
+- O e-mail vai para o endereço do cadastro da pessoa: o administrador preenche em **Usuários**, ou a própria pessoa em **Minha conta › E-mail para avisos**. Quem não tem e-mail não recebe nada. A tela **Envio** lembra quem ainda não cadastrou.
+- Sai da conta Google dona do script. Nome do remetente, assinatura e endereço para respostas ficam no início do `GoogleSheets_Script.gs` (`EMAIL_*`). Por padrão, a resposta vai para quem atendeu o pedido, se essa pessoa tiver e-mail.
+- Regravar a mesma minuta não manda o aviso de novo. Cancelamento feito pela própria pessoa não gera e-mail.
+- **Ativar (uma vez):** cole o script novo, mantenha o seu `CODIGO_ACESSO`, salve, escolha a função **testarEmail** e clique em **Executar**. Autorize o envio de e-mail; chegam dois exemplos na sua caixa. Depois **Implantar › Gerenciar implantações › ✏️ › Nova versão**.
+- Limite do Google: 100 e-mails por dia em contas Gmail comuns, 1.500 no Google Workspace.
+
 ## Atalhos de teclado (v2.8)
 Os atalhos não usam teclas que o navegador já usa. Lista completa no app em **Atalhos** (Alt+A).
 
