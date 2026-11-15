@@ -76,6 +76,19 @@
       </div>
       <div class="m-foot"><button class="ghost" data-close type="button">Voltar</button><button class="danger-primary" id="pedRecConfirmar" type="button">Recusar pedido</button></div>
     </div></div>
+    <div class="modal" id="mPedReabrir" aria-hidden="true"><div class="mbox sm-box" role="dialog" aria-modal="true" aria-labelledby="pedReaTitulo">
+      <div class="m-head"><h3 id="pedReaTitulo">Reabrir pedido</h3><button class="ghost sm icon-btn" data-close type="button" title="Fechar" data-ico="close"><span class="sr">Fechar</span></button></div>
+      <div class="m-body">
+        <p id="pedReaResumo"></p>
+        <p class="hint">O pedido volta para a fila de <b>aguardando</b> e entra num próximo malote. <span id="pedReaAviso"></span></p>
+        <label class="field"><span>Observação <i>(opcional, fica na conversa do pedido)</i></span><textarea id="pedReaNota" rows="3" maxlength="300" title="Por exemplo: vai no malote de segunda-feira. Quem pediu vê este texto."></textarea></label>
+      </div>
+      <div class="m-foot"><button class="ghost" data-close type="button">Voltar</button><button class="primary" id="pedReaConfirmar" type="button" data-ico="refresh"><span>Reabrir pedido</span></button></div>
+    </div></div>
+    <div class="notif-painel" id="notifPainel" hidden role="dialog" aria-label="Notificações">
+      <div class="notif-head"><b>Notificações</b><button class="lg-link" id="notifLerTodas" type="button">Marcar todas como lidas</button></div>
+      <div class="notif-lista" id="notifLista"></div>
+    </div>
     <div class="modal" id="mPedComent" aria-hidden="true"><div class="mbox ped-com-box" role="dialog" aria-modal="true" aria-labelledby="pedComTitulo">
       <div class="m-head">
         <div class="m-title"><span class="m-badge" data-ico="chat"></span><div><h3 id="pedComTitulo">Comentários do pedido</h3><p id="pedComSub"></p></div></div>
@@ -94,7 +107,13 @@
   window.hidratarIcones?.();
 
   // As janelas novas fecham pelo X, pelo fundo e pelo Esc como as outras.
-  ['mPedidos', 'mPedRecusar', 'mPedComent'].forEach((id) => {
+  // Sino de notificações: fica no topo da tela aberta, junto dos botões do cabeçalho.
+  const sino = document.createElement('button');
+  sino.type = 'button'; sino.id = 'notifBtn'; sino.className = 'ghost notif-btn'; sino.hidden = true;
+  sino.title = 'Notificações dos comentários'; sino.setAttribute('aria-label', 'Notificações');
+  sino.innerHTML = `${ico('bell')}<b class="notif-badge" id="notifBadge" hidden></b>`;
+
+  ['mPedidos', 'mPedRecusar', 'mPedReabrir', 'mPedComent'].forEach((id) => {
     const m = $(id);
     m.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => window.fecharModal?.(m)));
     m.addEventListener('mousedown', (e) => { if (e.target === m) window.fecharModal?.(m); });
@@ -123,7 +142,7 @@
     const eu = AUTH()?.usuario?.usuario;
     return comentariosDe(p).slice(vistos[p.id] || 0).filter((c) => c.usuario !== eu).length;
   };
-  const marcarLido = (p) => { vistos[p.id] = comentariosDe(p).length; guardarVistos(); };
+  const marcarLido = (p) => { vistos[p.id] = comentariosDe(p).length; guardarVistos(); atualizarSino(); };
   const totaisComentarios = new Map(); // para avisar comentário novo entre uma atualização e outra
   let comentandoId = null;
 
@@ -140,6 +159,7 @@
       pedidos = r.pedidos || []; podeAtender = !!r.podeAtender; podeExcluir = !!r.podeExcluir;
       notificar();
       atualizarAvisos();
+      atualizarSino();
       if (document.body.dataset.screen === 'pedidos') render();
       if ($('mPedidos').classList.contains('open')) renderModal();
       if (comentandoId && $('mPedComent').classList.contains('open')) renderComentarios();
@@ -174,8 +194,10 @@
       if (!primeiraCarga && antes != null && lista.length > antes) {
         const ultimo = lista[lista.length - 1];
         if (ultimo.usuario !== eu && comentandoId !== p.id) {
-          const t = `${ultimo.nome} comentou no pedido ${resumo(p)}: ${ultimo.texto.length > 80 ? ultimo.texto.slice(0, 80) + '…' : ultimo.texto}`;
-          window.toast?.(t); avisoDoSistema('Comentário no pedido', t);
+          const reab = /^↺/.test(ultimo.texto);
+          const t = reab ? `${ultimo.nome} reabriu o pedido ${resumo(p)}: ele voltou para a fila de envio.`
+            : `${ultimo.nome} comentou no pedido ${resumo(p)}: ${ultimo.texto.length > 80 ? ultimo.texto.slice(0, 80) + '…' : ultimo.texto}`;
+          window.toast?.(t); avisoDoSistema(reab ? 'Pedido reaberto' : 'Comentário no pedido', t);
         }
       }
       totaisComentarios.set(p.id, lista.length);
@@ -212,7 +234,9 @@
     else if (p.situacao === 'CANCELADO') estado = '<span class="perm-chip">Cancelado</span>';
     else if (dentro) estado = '<span class="perm-chip all">Na minuta aberta</span>';
     else if (!podeAtender) estado = '<span class="perm-chip wait">Aguardando o malote</span>';
-    const acoes = p.situacao !== 'AGUARDANDO' ? (podeExcluir && descartavel(p) ? `<button type="button" class="del" data-ped-excluir="${esc(p.id)}" title="Excluir o pedido">${ico('trash')}<span>Excluir</span></button>` : '') : (podeAtender && !meu)
+    const reabrivel = descartavel(p) && (podeAtender || (meu && p.situacao === 'CANCELADO'));
+    const botaoReabrir = reabrivel ? `<button type="button" class="ped-reabrir" data-ped-reabrir="${esc(p.id)}" title="Voltar o pedido para a fila, para um envio posterior">${ico('refresh')}<span>Reabrir</span></button>` : '';
+    const acoes = p.situacao !== 'AGUARDANDO' ? botaoReabrir + (podeExcluir && descartavel(p) ? `<button type="button" class="del" data-ped-excluir="${esc(p.id)}" title="Excluir o pedido">${ico('trash')}<span>Excluir</span></button>` : '') : (podeAtender && !meu)
       ? `<button type="button" class="del" data-ped-recusar="${esc(p.id)}" title="Recusar o pedido">${ico('close')}<span>Recusar</span></button>`
       : meu ? `<button type="button" class="del" data-ped-cancelar="${esc(p.id)}" title="Cancelar o pedido">${ico('close')}<span>Cancelar</span></button>` : '';
     const nCom = comentariosDe(p).length, novos = naoLidos(p);
@@ -238,8 +262,8 @@
     box.hidden = false;
     box.classList.toggle('sem', !u.email);
     $('pedEmailTxt').textContent = u.email
-      ? 'Você recebe um e-mail em ' + u.email + ' quando o pedido for incluído na minuta, recusado ou comentado.'
-      : 'Cadastre o seu e-mail para ser avisado quando o pedido for incluído na minuta, recusado ou comentado.';
+      ? 'Você recebe um e-mail em ' + u.email + ' quando o pedido for incluído na minuta, recusado, reaberto ou comentado.'
+      : 'Cadastre o seu e-mail para ser avisado quando o pedido for incluído na minuta, recusado, reaberto ou comentado.';
     $('pedEmailBtn').textContent = u.email ? 'Alterar' : 'Cadastrar e-mail';
   }
   $('pedEmailBtn')?.addEventListener('click', () => { $('sbUser')?.click(); setTimeout(() => $('contaEmail')?.focus(), 120); });
@@ -361,6 +385,98 @@
     window.toast?.('Pedido recusado. Quem pediu vai ver o motivo.'); carregar();
   });
 
+  // ---------- Reabrir pedido (recusado ou cancelado volta para a fila) ----------
+  let reabrindo = null;
+  function abrirReabrir(id) {
+    const p = pedidos.find((x) => x.id === id); if (!p) return;
+    reabrindo = p;
+    const eu = AUTH()?.usuario?.usuario;
+    $('pedReaResumo').innerHTML = `<b>${esc(resumo(p))}</b><br><small>${p.qtd} × ${esc(p.conteudo)} · pedido por ${esc(p.nome)} · ${p.situacao === 'RECUSADO' ? 'recusado' + (p.motivo ? ': ' + esc(p.motivo) : '') : 'cancelado'}</small>`;
+    $('pedReaAviso').textContent = p.usuario === eu ? '' : `${p.nome} recebe um aviso (e um e-mail, se tiver cadastrado).`;
+    $('pedReaNota').value = '';
+    window.abrirModal?.($('mPedReabrir'));
+    setTimeout(() => $('pedReaNota').focus(), 60);
+  }
+  $('pedReaConfirmar').addEventListener('click', async () => {
+    if (!reabrindo) return;
+    const b = $('pedReaConfirmar'); b.disabled = true;
+    const r = await api.auth('pedidos.reabrir', { id: reabrindo.id, nota: $('pedReaNota').value.trim() });
+    b.disabled = false;
+    if (!r?.ok) return window.toast?.(/minuta inválido|desconhecida/i.test(r?.error || '') ? 'Reabrir pedidos precisa da versão 3.0 do script do Google.' : (r?.error || 'Não foi possível reabrir o pedido.'), true);
+    const i = pedidos.findIndex((x) => x.id === reabrindo.id);
+    if (i >= 0) pedidos[i] = r.pedido;
+    vistos[r.pedido.id] = comentariosDe(r.pedido).length; guardarVistos(); // o registro de reabertura é seu: já conta como lido
+    totaisComentarios.set(r.pedido.id, comentariosDe(r.pedido).length);
+    situacaoAnterior.set(r.pedido.id, 'AGUARDANDO'); conhecidos.add(r.pedido.id);
+    window.fecharModal?.($('mPedReabrir')); reabrindo = null;
+    render(); atualizarAvisos(); atualizarSino();
+    window.toast?.(`Pedido ${resumo(r.pedido)} voltou para a fila.${r.emailsEnviados ? ' Quem pediu foi avisado por e-mail.' : ''}`);
+  });
+
+  // ---------- Central de notificações (comentários) ----------
+  const paraData = (t) => { const m = String(t || '').match(/(\d+)\/(\d+)\/(\d+)\s+(\d+):(\d+)(?::(\d+))?/); return m ? new Date(+m[3], m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)).getTime() : 0; };
+  function notificacoes() {
+    const eu = AUTH()?.usuario?.usuario;
+    const lista = [];
+    pedidos.forEach((p) => comentariosDe(p).forEach((c, i) => {
+      if (c.usuario === eu) return;
+      lista.push({ p, c, lido: i < (vistos[p.id] || 0), quando: paraData(c.data) });
+    }));
+    return lista.sort((a, b) => b.quando - a.quando).slice(0, 40);
+  }
+  function posicionarSino() {
+    const view = document.getElementById('v-' + (document.body.dataset.screen || ''));
+    const acts = view?.querySelector('.vh-actions');
+    if (acts && sino.parentNode !== acts) acts.prepend(sino);
+    sino.hidden = !usaPedidos() || !acts;
+    if (sino.hidden) fecharPainel();
+  }
+  function atualizarSino() {
+    posicionarSino();
+    const n = notificacoes().filter((x) => !x.lido).length;
+    const badge = $('notifBadge');
+    badge.hidden = !n; badge.textContent = n > 9 ? '9+' : String(n);
+    sino.classList.toggle('tem', !!n);
+    sino.title = n ? `${n} ${n === 1 ? 'comentário novo' : 'comentários novos'}` : 'Notificações dos comentários';
+    if (!$('notifPainel').hidden) renderPainel();
+  }
+  function renderPainel() {
+    const lista = notificacoes();
+    $('notifLerTodas').hidden = !lista.some((x) => !x.lido);
+    $('notifLista').innerHTML = lista.length ? lista.map((x) => {
+      const reab = /^↺/.test(x.c.texto);
+      const txt = x.c.texto.replace(/^↺\s*/, '');
+      return `<button type="button" class="notif-item${x.lido ? '' : ' novo'}" data-notif-ped="${esc(x.p.id)}">
+        <span class="notif-ico${reab ? ' reab' : ''}">${ico(reab ? 'refresh' : 'chat')}</span>
+        <span class="notif-txt"><span><b>${esc(x.c.nome)}</b> ${reab ? 'reabriu' : 'comentou em'} <b>${esc(resumo(x.p))}</b></span>
+        <small>${esc(txt.length > 110 ? txt.slice(0, 110) + '…' : txt)}</small><em>${esc(x.c.data)}</em></span>
+        ${x.lido ? '' : '<i class="ped-dot" aria-hidden="true"></i>'}</button>`;
+    }).join('') : '<div class="notif-vazio">Nenhum comentário por aqui ainda. Quando alguém comentar num pedido seu (ou num pedido que você atende), aparece aqui.</div>';
+  }
+  function abrirPainel() {
+    const painel = $('notifPainel');
+    renderPainel();
+    painel.hidden = false;
+    const r = sino.getBoundingClientRect();
+    const larg = Math.min(380, window.innerWidth - 16);
+    painel.style.width = larg + 'px';
+    painel.style.top = Math.round(r.bottom + 8) + 'px';
+    painel.style.left = Math.round(Math.max(8, Math.min(window.innerWidth - larg - 8, r.right - larg))) + 'px';
+    sino.setAttribute('aria-expanded', 'true');
+  }
+  function fecharPainel() { const pn = $('notifPainel'); if (pn && !pn.hidden) { pn.hidden = true; sino.setAttribute('aria-expanded', 'false'); } }
+  sino.addEventListener('click', (e) => { e.stopPropagation(); if ($('notifPainel').hidden) { carregar(); abrirPainel(); } else fecharPainel(); });
+  $('notifPainel').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const it = e.target.closest('[data-notif-ped]');
+    if (it) { fecharPainel(); abrirComentarios(it.dataset.notifPed); }
+  });
+  $('notifLerTodas').addEventListener('click', () => { pedidos.forEach((p) => { vistos[p.id] = comentariosDe(p).length; }); guardarVistos(); atualizarSino(); render(); });
+  document.addEventListener('click', fecharPainel);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharPainel(); }, true);
+  window.addEventListener('resize', fecharPainel);
+  new MutationObserver(posicionarSino).observe(document.body, { attributes: true, attributeFilter: ['data-screen'] });
+
   // ---------- Comentários ----------
   function renderComentarios() {
     const p = pedidos.find((x) => x.id === comentandoId);
@@ -373,7 +489,7 @@
     const box = $('pedComLista');
     const noFim = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
     box.innerHTML = lista.length
-      ? lista.map((c) => `<div class="ped-com${c.usuario === eu ? ' meu' : ''}"><div class="ped-com-meta"><b>${esc(c.usuario === eu ? 'Você' : c.nome)}</b><span>${esc(c.data)}</span></div><div class="ped-com-txt">${esc(c.texto).replace(/\n/g, '<br>')}</div></div>`).join('')
+      ? lista.map((c) => `<div class="ped-com${c.usuario === eu ? ' meu' : ''}${/^↺/.test(c.texto) ? ' reab' : ''}"><div class="ped-com-meta"><b>${esc(c.usuario === eu ? 'Você' : c.nome)}</b><span>${esc(c.data)}</span></div><div class="ped-com-txt">${esc(c.texto).replace(/\n/g, '<br>')}</div></div>`).join('')
       : '<div class="us-empty">Nenhum comentário ainda. Escreva abaixo para conversar sobre este pedido.</div>';
     if (noFim || !box.dataset.aberto) { box.scrollTop = box.scrollHeight; box.dataset.aberto = '1'; }
     const meu = !eu || p.usuario === eu;
@@ -411,6 +527,8 @@
   // Cliques nas listas (tela e janela usam o mesmo desenho).
   function ligarLista(box) {
     box.addEventListener('click', (e) => {
+      const ra = e.target.closest('[data-ped-reabrir]');
+      if (ra) return abrirReabrir(ra.dataset.pedReabrir);
       const cm = e.target.closest('[data-ped-coment]');
       if (cm) return abrirComentarios(cm.dataset.pedComent);
       const x = e.target.closest('[data-ped-excluir]');
@@ -436,7 +554,7 @@
   $('pedAtualizar').addEventListener('click', () => carregar({ silencioso: false }));
 
   // ---------- Ciclo ----------
-  window.addEventListener('gm-entrou', () => { entrou = true; setTimeout(() => carregar({ silencioso: true }), 2500); });
+  window.addEventListener('gm-entrou', () => { entrou = true; posicionarSino(); setTimeout(() => carregar({ silencioso: true }), 2500); });
   window.addEventListener('gm-minuta-registrada', () => setTimeout(() => carregar(), 1200));
   window.addEventListener('focus', () => carregar());
   let ultimo = 0;

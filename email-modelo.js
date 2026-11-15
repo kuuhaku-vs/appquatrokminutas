@@ -27,9 +27,9 @@
     ['minuta', 'Número da minuta'], ['o_seu_pedido', '"o seu pedido de envio" (ou "os seus pedidos…" quando são vários)'],
     ['atendente', 'Quem incluiu ou recusou'], ['data', 'Data e hora da inclusão ou recusa'],
     ['de', 'Quem está enviando'], ['para', 'Para quem vai'], ['motivo', 'Motivo da recusa'],
-    ['autor', 'Quem escreveu o comentário'], ['comentario', 'Texto do comentário'], ['horas', 'Horas do lembrete'], ['total', 'Quantidade de pedidos parados'],
+    ['nota', 'Observação de quem reabriu o pedido'], ['autor', 'Quem escreveu o comentário'], ['comentario', 'Texto do comentário'], ['horas', 'Horas do lembrete'], ['total', 'Quantidade de pedidos parados'],
   ];
-  const TIPOS = { incluido: 'pedido incluído', recusado: 'pedido recusado', comentario: 'comentário no pedido', lembrete: 'lembrete de pedido parado' };
+  const TIPOS = { incluido: 'pedido incluído', recusado: 'pedido recusado', reaberto: 'pedido reaberto', comentario: 'comentário no pedido', lembrete: 'lembrete de pedido parado' };
   const CAMPOS = [['minuta', 'Nº da minuta'], ['de', 'De'], ['para', 'Para'], ['quantidade', 'Quantidade e conteúdo'], ['observacao', 'Observação'], ['pedidoEm', 'Data do pedido'], ['motivo', 'Motivo (recusa)']];
 
   const campoTxt = (k, rotulo, dica, opts = {}) => {
@@ -60,7 +60,7 @@
     </div>
     <div class="m-body em-body">
       <div class="em-form" id="emForm">
-        <div class="seg em-tabs" role="tablist"><button type="button" class="active" data-em-tipo="incluido">Incluído</button><button type="button" data-em-tipo="recusado">Recusado</button><button type="button" data-em-tipo="comentario">Comentário</button><button type="button" data-em-tipo="lembrete">Lembrete</button></div>
+        <div class="seg em-tabs" role="tablist"><button type="button" class="active" data-em-tipo="incluido">Incluído</button><button type="button" data-em-tipo="recusado">Recusado</button><button type="button" data-em-tipo="reaberto">Reaberto</button><button type="button" data-em-tipo="comentario">Comentário</button><button type="button" data-em-tipo="lembrete">Lembrete</button></div>
         <p class="hint em-tipo-desc" id="emTipoDesc"></p>
 
         <div class="em-lembrete" data-tipo="lembrete">
@@ -87,6 +87,7 @@
           ${campoTxt('saudacao', 'Saudação <i>(vale para todos)</i>', 'Primeira linha do e-mail. Vazio esconde.', { span: 1, max: 120 })}
           ${tipoCampos('incluido')}
           ${tipoCampos('recusado')}
+          ${tipoCampos('reaberto')}
           ${tipoCampos('comentario')}
           ${tipoCampos('lembrete')}
         </div>
@@ -168,6 +169,7 @@
     $('emTipoDesc').textContent = {
       incluido: 'Vai para quem fez o pedido quando ele entra numa minuta.',
       recusado: 'Vai para quem fez o pedido quando ele é recusado, com o motivo.',
+      reaberto: 'Vai para quem fez o pedido quando um pedido recusado (ou cancelado) volta para a fila, para um envio posterior.',
       comentario: 'Quando quem pediu comenta, vai para quem monta o malote. Quando quem monta comenta, vai para quem pediu.',
       lembrete: 'Vai para quem monta o malote quando um pedido fica aguardando mais tempo que o configurado.',
     }[t];
@@ -201,7 +203,7 @@
     st.className = 'perm-chip ' + (r.modelo.ativo ? 'ok' : 'off');
     st.textContent = (r.modelo.ativo ? 'Ligado' : 'Desligado') + ' · ' + (personalizado ? 'modelo personalizado' : 'modelo padrão');
     $('emResumo').textContent = r.modelo.ativo
-      ? `Avisos de pedido incluído, recusado e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Só recebe quem tem e-mail no cadastro. Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
+      ? `Avisos de pedido incluído, recusado, reaberto e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Só recebe quem tem e-mail no cadastro. Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
       : 'Os avisos por e-mail estão desligados. Abra o modelo para ligar de novo.';
   }
   const AUTH = window.AUTH;
@@ -273,7 +275,7 @@
     const r = await api.auth('usuarios.emailteste', { modelo: ler() });
     b.disabled = false;
     if (!r?.ok) return toast(erroDe(r, 'Não foi possível enviar o teste.'), true);
-    toast(`${r.enviados || 4} e-mails de teste (um de cada tipo) enviados para ${r.para}${sujo ? '. Lembre de salvar o modelo.' : '.'}`);
+    toast(`${r.enviados || 5} e-mails de teste (um de cada tipo) enviados para ${r.para}${sujo ? '. Lembre de salvar o modelo.' : '.'}`);
   });
 
   window.EMAIL_MODELO = { carregarCard };

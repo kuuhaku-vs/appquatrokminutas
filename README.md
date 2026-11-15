@@ -69,6 +69,11 @@ Quando um pedido de envio é **incluído** numa minuta (ao gerar o PDF ou regist
 - **Ativar (uma vez):** cole o script novo, mantenha o seu `CODIGO_ACESSO`, salve, escolha a função **testarEmail** e clique em **Executar**. Autorize o envio de e-mail; chegam dois exemplos na sua caixa. Depois **Implantar › Gerenciar implantações › ✏️ › Nova versão**.
 - Limite do Google: 100 e-mails por dia em contas Gmail comuns, 1.500 no Google Workspace.
 
+## Reabrir pedido e notificações (v3.0)
+- **Reabrir:** pedido **recusado** (ou cancelado) ganha o botão **Reabrir** em "Atendidos recentemente". Ele volta para a fila de aguardando, para entrar num malote posterior, com uma observação opcional. A reabertura fica registrada na conversa do pedido e quem pediu recebe o e-mail **Reaberto** (editável no modelo). Quem monta o malote reabre qualquer pedido; quem pediu reabre só os que ele mesmo cancelou.
+- **Sino de notificações:** no topo de todas as telas, ao lado dos botões do cabeçalho. Mostra os comentários (e reaberturas) dos seus pedidos ou dos pedidos que você atende, com o número de não lidos. Clique num item para abrir a conversa; **Marcar todas como lidas** zera o contador. Os avisos de pedidos para incluir no malote continuam como antes.
+- Precisa do script do Google **3.0**.
+
 ## Comentários, lembrete e auditoria (v2.9)
 - **Comentários nos pedidos:** na tela **Envio**, cada pedido tem o botão **Comentar** (ou o número de comentários). Abre uma conversa entre quem pediu e quem monta o malote. O ponto vermelho marca comentário que você ainda não leu, e chega um aviso no app quando alguém comenta. Por e-mail: quando quem pediu comenta, avisa quem monta o malote; quando quem monta comenta, avisa quem pediu. Os comentários ficam na aba **Comentarios** da planilha.
 - **Lembrete de pedido parado:** pedido aguardando há mais de N horas (padrão 24) gera um e-mail para quem monta o malote e se repete a cada N horas enquanto continuar parado. Liga, desliga, muda as horas e o texto em **Usuários › Aviso por e-mail › Editar modelo › Lembrete**. A verificação roda enquanto o app está em uso (no máximo a cada 30 min). Para testar na hora: função `testarLembrete` no editor do Apps Script.

@@ -87,6 +87,8 @@
  *     desliga e muda as horas em Usuários › Aviso por e-mail › Editar modelo.
  *     A verificação acontece enquanto o app está em uso (a cada 30 min, no
  *     máximo). Para testar na hora, rode a função testarLembrete no editor.
+ *   • REABRIR (3.0): pedido recusado ou cancelado pode voltar para a fila,
+ *     para um malote posterior; fica na conversa e quem pediu recebe e-mail.
  *   • AUDITORIA: aba "Auditoria" com quem fez o quê e quando (entradas no
  *     sistema, minutas, pedidos, comentários, usuários, modelo de e-mail).
  *     Consulte em Usuários › Histórico de ações. Guarda as últimas 20 mil linhas.
@@ -104,7 +106,7 @@ const ABA_AUDITORIA = 'Auditoria';
 const CAB_COMENTARIOS = ['Pedido', 'Data', 'Usuário', 'Nome', 'Comentário'];
 const CAB_AUDITORIA = ['Data', 'Usuário', 'Nome', 'Ação', 'Alvo', 'Detalhes'];
 const MAX_AUDITORIA = 20000; // linhas guardadas na aba Auditoria (as mais antigas saem)
-const VERSAO_SCRIPT = '2.9';
+const VERSAO_SCRIPT = '3.0';
 
 // ---------- Avisos por e-mail ----------
 const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
@@ -185,6 +187,7 @@ function processar(req, ss, ctx) {
     if (req.acao === 'pedidos.cancelar') return (cancelarPedido(ss, quem, req));
     if (req.acao === 'pedidos.excluir') { exigir(quem, 'pedidos.excluir'); return (excluirPedidos(ss, req)); }
     if (req.acao === 'pedidos.comentar') return (comentarPedido(ss, usuarios, quem, req));
+    if (req.acao === 'pedidos.reabrir') return (reabrirPedido(ss, usuarios, quem, req));
     if (req.acao === 'usuarios.auditoria') { exigir(quem, 'usuarios.gerenciar'); return (lerAuditoria(ss, req)); }
     if (req.acao === 'usuarios.listar') { exigir(quem, 'usuarios.gerenciar'); return ({ ok: true, usuarios: usuarios.map(publico), permissoes: PERMISSOES, perfis: PERFIS }); }
     if (req.acao === 'usuarios.salvar') { exigir(quem, 'usuarios.gerenciar'); return (salvarUsuario(ss, abaU, usuarios, quem, req)); }
@@ -861,6 +864,44 @@ function comentarPedido(ss, usuarios, quem, req) {
 }
 
 // ============================================================
+//  REABRIR PEDIDO (versão 3.0)
+// ============================================================
+// Pedido recusado (ou cancelado) volta para a fila, para entrar num malote posterior.
+// Fica registrado na conversa do pedido e quem pediu recebe um e-mail.
+function reabrirPedido(ss, usuarios, quem, req) {
+  const dados = lerPedidos(ss);
+  const p = dados.lista.filter(function (x) { return x.id === String(req.id || ''); })[0];
+  if (!p) throw erroAcesso('pedido', 'Pedido não encontrado.');
+  if (p.situacao !== SIT_RECUSADO && p.situacao !== SIT_CANCELADO) throw erroAcesso('pedido', 'Só dá para reabrir pedidos recusados ou cancelados. Este está ' + p.situacao.toLowerCase() + '.');
+  const eu = quem.usuario || 'codigo';
+  const meu = p.usuario === eu;
+  const atende = podeAtenderPedidos(quem);
+  if (!atende && !(meu && p.situacao === SIT_CANCELADO)) throw erroAcesso('permissao', 'Só quem monta o malote pode reabrir um pedido recusado.');
+  const abertos = dados.lista.filter(function (x) { return x.usuario === p.usuario && x.situacao === SIT_AGUARDANDO; }).length;
+  if (abertos >= MAX_PEDIDOS_ABERTOS) throw erroAcesso('limite', p.nome + ' já tem ' + abertos + ' pedidos aguardando.');
+  const anterior = p.situacao, motivoAnterior = p.motivo;
+  const nota = textoLimpo(req.nota, 300);
+  const agora = agoraTexto(ss);
+  p.situacao = SIT_AGUARDANDO; p.minuta = ''; p.motivo = '';
+  p.atendidoPor = quem.nome || eu; p.atendidoEm = agora; // quem reabriu e quando (aparece no e-mail)
+  p.lembreteEm = agora; // o lembrete de pedido parado conta a partir de agora
+  gravarPedido(dados.aba, p);
+  // Registro na conversa do pedido.
+  const aba = obterAba(ss, ABA_COMENTARIOS, CAB_COMENTARIOS);
+  const texto = '↺ Reabriu o pedido para um envio posterior' + (anterior === SIT_RECUSADO ? ' (estava recusado' + (motivoAnterior ? ': ' + motivoAnterior : '') + ')' : ' (estava cancelado)') + '.' + (nota ? '\n' + nota : '');
+  aba.getRange(aba.getLastRow() + 1, 1, 1, CAB_COMENTARIOS.length).setNumberFormat('@').setValues([[p.id, agora, eu, quem.nome || eu, texto]]);
+  const lista = lerComentarios(ss)[p.id] || [];
+  let emails = 0;
+  if (!meu) {
+    try {
+      const dono = usuarios.filter(function (u) { return u.usuario === p.usuario; })[0];
+      if (dono && enviarAviso(lerModeloEmail().modelo, dono, 'reaberto', [p], quem, { nota: nota })) emails = 1;
+    } catch (err) { console.error('Aviso de pedido reaberto não enviado: ' + ((err && err.message) || err)); }
+  }
+  return { ok: true, pedido: pedidoPublico(p, lista), anterior: anterior, nota: nota, emailsEnviados: emails };
+}
+
+// ============================================================
 //  LEMBRETE DE PEDIDO PARADO (versão 2.9)
 // ============================================================
 // Pedidos aguardando há mais de N horas geram um e-mail para quem monta o malote,
@@ -940,6 +981,7 @@ function auditar(ss, quem, req, res) {
     : ['Cancelou pedido de envio', ped, ''];
   else if (a === 'pedidos.excluir') linha = ['Excluiu pedidos de envio', res.excluidos + (res.excluidos === 1 ? ' pedido' : ' pedidos'), (res.pedidos || []).join(' · ')];
   else if (a === 'pedidos.comentar') linha = ['Comentou no pedido', ped, res.comentario ? res.comentario.texto : ''];
+  else if (a === 'pedidos.reabrir') linha = ['Reabriu pedido de envio', ped, 'Estava ' + String(res.anterior || '').toLowerCase() + ' · pedido de ' + res.pedido.nome + (res.nota ? ' · ' + res.nota : '')];
   else if (a === 'usuarios.salvar') {
     const u = res.usuario || {}, d = req.usuario || {};
     linha = [req.novo ? 'Criou usuário' : 'Alterou usuário', '@' + u.usuario,
@@ -988,7 +1030,7 @@ const CHAVE_MODELO_EMAIL = 'EMAIL_MODELO_V1';
 
 // Modelo padrão. Campos de texto aceitam:
 //   {primeiro_nome} {nome} {usuario} {minuta} {o_seu_pedido} {atendente} {data} {de} {para} {motivo}
-//   {autor} {comentario} (comentário) · {horas} {total} (lembrete)
+//   {autor} {comentario} (comentário) · {horas} {total} (lembrete) · {nota} (reaberto)
 //   **texto** = negrito · linha em branco = novo parágrafo · campo vazio = não aparece no e-mail.
 function modeloEmailPadrao() {
   return {
@@ -1011,6 +1053,13 @@ function modeloEmailPadrao() {
       selo: 'RECUSADO',
       linhaAtendente: 'Analisado por **{atendente}** em {data}.',
       fechamento: 'Se ainda for necessário, você pode lançar um novo pedido no Gerador de Minutas ou responder a este e-mail para combinar o envio.'
+    },
+    reaberto: {
+      assunto: 'Seu pedido de envio voltou para a fila: {de} → {para}',
+      abertura: 'Informamos que {o_seu_pedido} foi **reaberto** e voltou para a fila de envio. Ele será incluído em um próximo malote.',
+      selo: 'REABERTO',
+      linhaAtendente: 'Reaberto por **{atendente}** em {data}.',
+      fechamento: 'Se o envio não for mais necessário, cancele o pedido no Gerador de Minutas, na tela **Envio**.'
     },
     comentario: {
       assunto: 'Novo comentário no pedido de envio: {de} → {para}',
@@ -1063,7 +1112,7 @@ function salvarModeloEmail(req) {
   const m = mesclarModelo(modeloEmailPadrao(), req.modelo || {});
   if (m.responderPara) m.responderPara = validarEmail(m.responderPara);
   if (!String(m.remetente).trim()) m.remetente = EMAIL_NOME_REMETENTE;
-  if (['incluido', 'recusado', 'comentario', 'lembrete'].some(function (t) { return !String(m[t].assunto).trim(); })) throw erroAcesso('email', 'O assunto do e-mail não pode ficar vazio.');
+  if (TIPOS_EMAIL.some(function (t) { return !String(m[t].assunto).trim(); })) throw erroAcesso('email', 'O assunto do e-mail não pode ficar vazio.');
   const h = Number(String(m.lembrete.horas).replace(',', '.'));
   if (!(h >= 1 && h <= 720)) throw erroAcesso('email', 'O lembrete precisa de um tempo entre 1 e 720 horas.');
   m.lembrete.horas = String(Math.round(h * 10) / 10);
@@ -1071,7 +1120,7 @@ function salvarModeloEmail(req) {
   return { ok: true, modelo: m, personalizado: true, padrao: modeloEmailPadrao() };
 }
 
-const TIPOS_EMAIL = ['incluido', 'recusado', 'comentario', 'lembrete'];
+const TIPOS_EMAIL = ['incluido', 'recusado', 'reaberto', 'comentario', 'lembrete'];
 
 // Pedido de exemplo para a prévia e o e-mail de teste.
 function exemploEmail(tipo, quem, modelo) {
@@ -1084,6 +1133,7 @@ function exemploEmail(tipo, quem, modelo) {
   if (tipo === 'lembrete') pedidos.push({ criadoEm: agora, de: 'Eduardo - Laboratório', para: 'Paulo - Filial Sul', qtd: 1, conteudo: 'Caixa', obs: '', nome: 'Eduardo Lima' });
   const horas = (modelo && modelo.lembrete && modelo.lembrete.horas) || '24';
   const extra = tipo === 'comentario' ? { autor: 'Mariana Souza', comentario: 'Consegue ir no malote de amanhã cedo? É urgente.' }
+    : tipo === 'reaberto' ? { nota: 'Vai no malote de segunda-feira.' }
     : tipo === 'lembrete' ? { horas: horas, total: String(pedidos.length) } : {};
   return { dono: dono, pedidos: pedidos, quem: { nome: (quem && quem.nome) || 'Expedição', email: '' }, extra: extra };
 }
@@ -1178,9 +1228,9 @@ function montarEmailPedido(tipo, dono, pedidos, quem, modelo, extra) {
     minuta: p0.minuta || '', o_seu_pedido: varios ? 'os seus pedidos de envio' : 'o seu pedido de envio',
     atendente: (quem && (quem.nome || quem.usuario)) || p0.atendidoPor || '', data: p0.atendidoEm || '',
     de: p0.de || '', para: p0.para || '', motivo: p0.motivo || 'Não informado',
-    autor: extra.autor || '', comentario: extra.comentario || '', horas: extra.horas || (modelo.lembrete && modelo.lembrete.horas) || '', total: extra.total || String(pedidos.length)
+    autor: extra.autor || '', comentario: extra.comentario || '', nota: extra.nota || '', horas: extra.horas || (modelo.lembrete && modelo.lembrete.horas) || '', total: extra.total || String(pedidos.length)
   };
-  const cor = { incluido: '#16794c', recusado: '#b42318', comentario: '#2563eb', lembrete: '#b45309' }[tipo];
+  const cor = { incluido: '#16794c', recusado: '#b42318', reaberto: '#6d28d9', comentario: '#2563eb', lembrete: '#b45309' }[tipo];
   const estiloP = 'margin:0 0 14px;color:#374151;font-size:14px;line-height:1.6;';
 
   const assunto = textoParaTexto(t.assunto, vars).replace(/\s+/g, ' ') || 'Pedido de envio';
@@ -1212,10 +1262,12 @@ function montarEmailPedido(tipo, dono, pedidos, quem, modelo, extra) {
       '<table role="presentation" cellpadding="0" cellspacing="0">' + ds.map(function (d) { return linha(d[0], d[1]); }).join('') + '</table></td></tr></table>';
   }).join('');
   // Comentário em destaque, logo abaixo do quadro.
-  const blocoComentario = tipo === 'comentario' && vars.comentario
-    ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;"><tr><td style="border-left:3px solid ' + cor + ';background:#eff6ff;border-radius:0 10px 10px 0;padding:12px 16px;">' +
-      '<div style="font-size:11px;font-weight:700;letter-spacing:.04em;color:#5b6475;text-transform:uppercase;margin-bottom:4px;">' + escHtml(vars.autor) + ' escreveu</div>' +
-      '<div style="font-size:14px;line-height:1.55;color:#111827;">' + escHtml(vars.comentario).replace(/\n/g, '<br>') + '</div></td></tr></table>'
+  const citacao = tipo === 'comentario' && vars.comentario ? { quem: vars.autor + ' escreveu', txt: vars.comentario, fundo: '#eff6ff' }
+    : tipo === 'reaberto' && vars.nota ? { quem: 'Observação de ' + (vars.atendente || 'quem reabriu'), txt: vars.nota, fundo: '#f5f3ff' } : null;
+  const blocoComentario = citacao
+    ? '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;"><tr><td style="border-left:3px solid ' + cor + ';background:' + citacao.fundo + ';border-radius:0 10px 10px 0;padding:12px 16px;">' +
+      '<div style="font-size:11px;font-weight:700;letter-spacing:.04em;color:#5b6475;text-transform:uppercase;margin-bottom:4px;">' + escHtml(citacao.quem) + '</div>' +
+      '<div style="font-size:14px;line-height:1.55;color:#111827;">' + escHtml(citacao.txt).replace(/\n/g, '<br>') + '</div></td></tr></table>'
     : '';
 
   const linhasAss = String(modelo.assinatura || '').split('\n').map(function (x) { return preencherVars(x, vars).trim(); }).filter(String);
@@ -1263,7 +1315,7 @@ function montarEmailPedido(tipo, dono, pedidos, quem, modelo, extra) {
     .concat(pedidos.map(function (p) {
       return (selo ? '[' + selo + ']\n' : '') + detalhes(p).map(function (d) { return d[0] + ': ' + d[1]; }).join('\n');
     }))
-    .concat(tipo === 'comentario' && vars.comentario ? [vars.autor + ' escreveu:\n' + vars.comentario] : [])
+    .concat(citacao ? [citacao.quem + ':\n' + citacao.txt] : [])
     .concat([textoParaTexto(t.linhaAtendente, vars), textoParaTexto(t.fechamento, vars),
       modelo.botao.mostrar && String(modelo.botao.texto).trim() ? preencherVars(modelo.botao.texto, vars) + ': ' + URL_APP : '',
       [textoParaTexto(modelo.despedida, vars)].concat(linhasAss.map(function (l) { return l.replace(/\*\*(.+?)\*\*/g, '$1'); })).filter(String).join('\n'),
