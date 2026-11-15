@@ -69,6 +69,12 @@ Quando um pedido de envio é **incluído** numa minuta (ao gerar o PDF ou regist
 - **Ativar (uma vez):** cole o script novo, mantenha o seu `CODIGO_ACESSO`, salve, escolha a função **testarEmail** e clique em **Executar**. Autorize o envio de e-mail; chegam dois exemplos na sua caixa. Depois **Implantar › Gerenciar implantações › ✏️ › Nova versão**.
 - Limite do Google: 100 e-mails por dia em contas Gmail comuns, 1.500 no Google Workspace.
 
+## Comentários, lembrete e auditoria (v2.9)
+- **Comentários nos pedidos:** na tela **Envio**, cada pedido tem o botão **Comentar** (ou o número de comentários). Abre uma conversa entre quem pediu e quem monta o malote. O ponto vermelho marca comentário que você ainda não leu, e chega um aviso no app quando alguém comenta. Por e-mail: quando quem pediu comenta, avisa quem monta o malote; quando quem monta comenta, avisa quem pediu. Os comentários ficam na aba **Comentarios** da planilha.
+- **Lembrete de pedido parado:** pedido aguardando há mais de N horas (padrão 24) gera um e-mail para quem monta o malote e se repete a cada N horas enquanto continuar parado. Liga, desliga, muda as horas e o texto em **Usuários › Aviso por e-mail › Editar modelo › Lembrete**. A verificação roda enquanto o app está em uso (no máximo a cada 30 min). Para testar na hora: função `testarLembrete` no editor do Apps Script.
+- **Histórico de ações (auditoria):** em **Usuários › Histórico de ações** (só Administrador), com busca, filtro por tipo e **Baixar CSV**. Registra entradas no sistema (e logins recusados), minutas registradas, alteradas e excluídas, pedidos criados, cancelados, recusados e excluídos, comentários, usuários criados, alterados e excluídos, troca de senha e de e-mail, mudanças no modelo de e-mail e os lembretes enviados. Fica na aba **Auditoria** da planilha (últimas 20 mil linhas).
+- Precisa do script do Google **2.9**.
+
 ## Atalhos de teclado (v2.8)
 Os atalhos não usam teclas que o navegador já usa. Lista completa no app em **Atalhos** (Alt+A).
 

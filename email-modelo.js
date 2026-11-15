@@ -27,7 +27,9 @@
     ['minuta', 'Número da minuta'], ['o_seu_pedido', '"o seu pedido de envio" (ou "os seus pedidos…" quando são vários)'],
     ['atendente', 'Quem incluiu ou recusou'], ['data', 'Data e hora da inclusão ou recusa'],
     ['de', 'Quem está enviando'], ['para', 'Para quem vai'], ['motivo', 'Motivo da recusa'],
+    ['autor', 'Quem escreveu o comentário'], ['comentario', 'Texto do comentário'], ['horas', 'Horas do lembrete'], ['total', 'Quantidade de pedidos parados'],
   ];
+  const TIPOS = { incluido: 'pedido incluído', recusado: 'pedido recusado', comentario: 'comentário no pedido', lembrete: 'lembrete de pedido parado' };
   const CAMPOS = [['minuta', 'Nº da minuta'], ['de', 'De'], ['para', 'Para'], ['quantidade', 'Quantidade e conteúdo'], ['observacao', 'Observação'], ['pedidoEm', 'Data do pedido'], ['motivo', 'Motivo (recusa)']];
 
   const campoTxt = (k, rotulo, dica, opts = {}) => {
@@ -58,7 +60,16 @@
     </div>
     <div class="m-body em-body">
       <div class="em-form" id="emForm">
-        <div class="seg em-tabs" role="tablist"><button type="button" class="active" data-em-tipo="incluido">Pedido incluído</button><button type="button" data-em-tipo="recusado">Pedido recusado</button></div>
+        <div class="seg em-tabs" role="tablist"><button type="button" class="active" data-em-tipo="incluido">Incluído</button><button type="button" data-em-tipo="recusado">Recusado</button><button type="button" data-em-tipo="comentario">Comentário</button><button type="button" data-em-tipo="lembrete">Lembrete</button></div>
+        <p class="hint em-tipo-desc" id="emTipoDesc"></p>
+
+        <div class="em-lembrete" data-tipo="lembrete">
+          <span class="sub-title">Lembrete de pedido parado</span>
+          <div class="chips-check"><label><input type="checkbox" data-k="lembrete.ativo" /><span>Enviar lembrete para quem monta o malote</span></label></div>
+          <div class="fgrid">
+            <label class="field"><span>Avisar depois de (horas)</span><input data-k="lembrete.horas" type="number" min="1" max="720" step="1" title="Quantas horas um pedido pode ficar aguardando antes do lembrete. O lembrete se repete a cada esse número de horas enquanto o pedido continuar parado." /></label>
+          </div>
+        </div>
 
         <span class="sub-title">Envio</span>
         <div class="chips-check"><label><input type="checkbox" data-k="ativo" /><span>Enviar os avisos por e-mail</span></label></div>
@@ -73,9 +84,11 @@
 
         <span class="sub-title">Mensagem · <b id="emTipoNome">pedido incluído</b></span>
         <div class="fgrid">
-          ${campoTxt('saudacao', 'Saudação <i>(vale para os dois)</i>', 'Primeira linha do e-mail. Vazio esconde.', { span: 1, max: 120 })}
+          ${campoTxt('saudacao', 'Saudação <i>(vale para todos)</i>', 'Primeira linha do e-mail. Vazio esconde.', { span: 1, max: 120 })}
           ${tipoCampos('incluido')}
           ${tipoCampos('recusado')}
+          ${tipoCampos('comentario')}
+          ${tipoCampos('lembrete')}
         </div>
 
         <span class="sub-title">Quadro de detalhes</span>
@@ -151,7 +164,13 @@
     tipo = t;
     modal.querySelectorAll('[data-em-tipo]').forEach((b) => b.classList.toggle('active', b.dataset.emTipo === t));
     modal.querySelectorAll('[data-tipo]').forEach((el) => (el.hidden = el.dataset.tipo !== t));
-    $('emTipoNome').textContent = t === 'incluido' ? 'pedido incluído' : 'pedido recusado';
+    $('emTipoNome').textContent = TIPOS[t];
+    $('emTipoDesc').textContent = {
+      incluido: 'Vai para quem fez o pedido quando ele entra numa minuta.',
+      recusado: 'Vai para quem fez o pedido quando ele é recusado, com o motivo.',
+      comentario: 'Quando quem pediu comenta, vai para quem monta o malote. Quando quem monta comenta, vai para quem pediu.',
+      lembrete: 'Vai para quem monta o malote quando um pedido fica aguardando mais tempo que o configurado.',
+    }[t];
     atualizarPrevia(0);
   }
 
@@ -182,7 +201,7 @@
     st.className = 'perm-chip ' + (r.modelo.ativo ? 'ok' : 'off');
     st.textContent = (r.modelo.ativo ? 'Ligado' : 'Desligado') + ' · ' + (personalizado ? 'modelo personalizado' : 'modelo padrão');
     $('emResumo').textContent = r.modelo.ativo
-      ? 'Quem faz um pedido de envio recebe um e-mail quando o pedido é incluído na minuta ou recusado (se tiver e-mail no cadastro). Você pode mudar o texto, a assinatura e o que aparece no e-mail.'
+      ? `Avisos de pedido incluído, recusado e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Só recebe quem tem e-mail no cadastro. Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
       : 'Os avisos por e-mail estão desligados. Abra o modelo para ligar de novo.';
   }
   const AUTH = window.AUTH;
@@ -220,7 +239,10 @@
 
   $('emSalvar').addEventListener('click', async () => {
     const m = ler();
-    if (!String(m.incluido?.assunto || '').trim() || !String(m.recusado?.assunto || '').trim()) return toast('O assunto do e-mail não pode ficar vazio (confira as duas abas).', true);
+    const semAssunto = Object.keys(TIPOS).find((t) => !String(m[t]?.assunto || '').trim());
+    if (semAssunto) { mostrarTipo(semAssunto); return toast(`O assunto do e-mail de ${TIPOS[semAssunto]} não pode ficar vazio.`, true); }
+    const h = Number(m.lembrete?.horas);
+    if (!(h >= 1 && h <= 720)) { mostrarTipo('lembrete'); return toast('O lembrete precisa de um tempo entre 1 e 720 horas.', true); }
     if (m.responderPara && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.responderPara.trim())) return toast('Confira o e-mail de "Responder para".', true);
     const b = $('emSalvar'); b.disabled = true;
     const r = await api.auth('usuarios.emailsalvar', { modelo: m });
@@ -251,7 +273,7 @@
     const r = await api.auth('usuarios.emailteste', { modelo: ler() });
     b.disabled = false;
     if (!r?.ok) return toast(erroDe(r, 'Não foi possível enviar o teste.'), true);
-    toast('Dois e-mails de teste (incluído e recusado) enviados para ' + r.para + (sujo ? '. Lembre de salvar o modelo.' : '.'));
+    toast(`${r.enviados || 4} e-mails de teste (um de cada tipo) enviados para ${r.para}${sujo ? '. Lembre de salvar o modelo.' : '.'}`);
   });
 
   window.EMAIL_MODELO = { carregarCard };

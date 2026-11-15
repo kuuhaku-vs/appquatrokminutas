@@ -301,3 +301,59 @@
   .em-form { overflow: visible; }
   #emFrame { min-height: 560px; }
 }
+
+/* ---------- Comentários nos pedidos (v2.9) ---------- */
+.ped-acoes { align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.ped-com-btn { position: relative; display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font-size: 12px; font-weight: 600; cursor: pointer; }
+.ped-com-btn:hover { border-color: var(--accent-ring); color: var(--accent-2); }
+.ped-com-btn .ico, .ped-com-btn svg { width: 14px; height: 14px; }
+.ped-com-btn.novo { border-color: var(--accent); color: var(--accent-2); background: var(--accent-soft); }
+.ped-dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--surface); }
+.ped-com-box { width: min(620px, 100%); height: min(720px, calc(100vh - 48px)); }
+.ped-com-body { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; overflow: hidden; }
+.ped-com-resumo { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); font-size: 12.5px; color: var(--text-2); }
+.ped-com-resumo .det-obs { margin-top: 6px; }
+.ped-com-lista { flex: 1; min-height: 120px; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 2px 2px 6px; }
+.ped-com { max-width: 82%; align-self: flex-start; padding: 9px 12px; border-radius: 12px 12px 12px 4px; background: var(--surface-2); border: 1px solid var(--border); }
+.ped-com.meu { align-self: flex-end; border-radius: 12px 12px 4px 12px; background: var(--accent-soft); border-color: var(--accent-ring); }
+.ped-com-meta { display: flex; gap: 8px; align-items: baseline; margin-bottom: 3px; font-size: 11.5px; }
+.ped-com-meta b { color: var(--text); }
+.ped-com-meta span { color: var(--muted); }
+.ped-com-txt { font-size: 13.5px; line-height: 1.5; color: var(--text); white-space: normal; overflow-wrap: anywhere; }
+.ped-com-escrever { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: end; padding: 12px 20px 4px; border-top: 1px solid var(--border); }
+.ped-com-escrever textarea { resize: none; min-height: 44px; max-height: 140px; }
+.ped-com-nota { margin: 0; padding: 4px 20px 14px; }
+@media (max-width: 720px) { .ped-com-box { height: 92vh; } .ped-com { max-width: 92%; } }
+
+/* ---------- Editor de e-mail: 4 tipos (v2.9) ---------- */
+.em-tabs button { padding: 0 6px; font-size: 11.5px; }
+.em-tipo-desc { margin: 8px 0 0; }
+.em-lembrete { margin-top: 4px; padding: 0 12px 12px; border-radius: 12px; border: 1px solid var(--warn); background: var(--warn-soft); }
+.em-lembrete .sub-title { margin-top: 12px; }
+
+/* ---------- Histórico de ações / auditoria (v2.9) ---------- */
+.au-card { margin-top: 16px; }
+.au-ultimos { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.au-box { height: min(860px, calc(100vh - 48px)); }
+.au-filtros { display: grid; grid-template-columns: minmax(0, 1fr) 220px auto; gap: 10px; align-items: end; padding: 14px 20px 0; }
+.au-filtros .field { margin: 0; }
+.au-body { flex: 1; min-height: 0; overflow: auto; }
+.au-lista { display: flex; flex-direction: column; gap: 6px; }
+.au-item { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 9px 12px 9px 0; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); overflow: hidden; }
+.au-marca { align-self: stretch; margin: -9px 0; background: var(--accent); }
+.au-ok .au-marca { background: var(--ok); }
+.au-perigo .au-marca { background: var(--danger); }
+.au-aviso .au-marca { background: var(--warn); }
+.au-top { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 13px; }
+.au-top b { color: var(--text); }
+.au-alvo { color: var(--accent-2); font-size: 12.5px; font-weight: 600; }
+.au-det { margin-top: 2px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.au-quem { text-align: right; font-size: 12px; white-space: nowrap; }
+.au-quem b { display: block; color: var(--text-2); }
+.au-quem small { color: var(--muted); font-size: 11px; }
+.au-total { margin-right: auto; }
+@media (max-width: 720px) {
+  .au-filtros { grid-template-columns: 1fr; }
+  .au-item { grid-template-columns: 4px minmax(0, 1fr); }
+  .au-quem { grid-column: 2; text-align: left; white-space: normal; }
+}
