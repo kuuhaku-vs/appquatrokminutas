@@ -14,7 +14,13 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const toast = (m, e) => window.toast?.(m, e);
   const MSG_SCRIPT = 'O script do Google precisa ser atualizado para a versão 2.8 para editar o e-mail.';
-  const erroDe = (r, padrao) => (/minuta inválido|desconhecida/i.test(r?.error || '') ? MSG_SCRIPT : (r?.error || padrao));
+  const MSG_AUTORIZAR = 'Falta autorizar o envio de e-mail: no Apps Script da planilha, escolha a função testarEmail, clique em Executar e permita "Enviar e-mail como você".';
+  const erroDe = (r, padrao) => {
+    const e = r?.error || '';
+    if (/minuta inválido|desconhecida/i.test(e)) return MSG_SCRIPT;
+    if (/MailApp|script\.send_mail|permiss[aã]o para chamar/i.test(e)) return MSG_AUTORIZAR;
+    return e || padrao;
+  };
 
   const VARS = [
     ['primeiro_nome', 'Primeiro nome de quem pediu'], ['nome', 'Nome completo de quem pediu'], ['usuario', 'Usuário de quem pediu'],
@@ -95,7 +101,7 @@
 
       <div class="em-preview">
         <div class="em-prev-head"><small>Assunto</small><strong id="emAssunto">—</strong><span class="em-prev-status" id="emPrevStatus"></span></div>
-        <iframe id="emFrame" title="Prévia do e-mail" sandbox=""></iframe>
+        <div id="emFrame" class="em-frame" role="document" aria-label="Prévia do e-mail"></div>
         <p class="hint em-prev-nota">Prévia com um pedido de exemplo. O e-mail de verdade usa os dados do pedido.</p>
       </div>
     </div>
@@ -115,6 +121,19 @@
 
   // ---------- Estado ----------
   let modelo = null, padrao = null, personalizado = false, tipo = 'incluido', ultimoCampo = null, timerPrevia = 0, seqPrevia = 0, sujo = false;
+
+  // Prévia num Shadow DOM (não num iframe): funciona com a política de segurança do app,
+  // inclusive no programa do Windows. innerHTML não executa scripts; o e-mail só tem estilos em linha.
+  const raizPrevia = $('emFrame').attachShadow({ mode: 'open' });
+  function mostrarPrevia(html) {
+    if (!html) { raizPrevia.innerHTML = ''; return; }
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script, iframe, object, embed, link, meta').forEach((el) => el.remove());
+    doc.querySelectorAll('*').forEach((el) => [...el.attributes].forEach((a) => { if (/^on/i.test(a.name)) el.removeAttribute(a.name); }));
+    doc.querySelectorAll('img').forEach((img) => { if (/logo\.png(\?|$)/.test(img.getAttribute('src') || '')) img.setAttribute('src', 'logo.png'); });
+    doc.querySelectorAll('a').forEach((a) => { a.setAttribute('target', '_blank'); a.setAttribute('rel', 'noopener'); a.addEventListener?.('click', (e) => e.preventDefault()); });
+    raizPrevia.innerHTML = `<style>:host{all:initial;display:block}a{pointer-events:none}</style><div style="${(doc.body.getAttribute('style') || '').replace(/"/g, '&quot;')}">${doc.body.innerHTML}</div>`;
+  }
 
   const pegar = (obj, k) => k.split('.').reduce((o, p) => (o == null ? undefined : o[p]), obj);
   const por = (obj, k, v) => { const ps = k.split('.'); let o = obj; ps.slice(0, -1).forEach((p) => (o = o[p] = o[p] || {})); o[ps[ps.length - 1]] = v; };
@@ -145,7 +164,7 @@
       if (n !== seqPrevia) return; // chegou uma resposta mais nova
       if (!r?.ok) { $('emPrevStatus').textContent = erroDe(r, 'Não foi possível montar a prévia.'); return; }
       $('emAssunto').textContent = r.assunto || '—';
-      $('emFrame').srcdoc = r.html || '';
+      mostrarPrevia(r.html || '');
       $('emPrevStatus').textContent = '';
     }, espera);
   }
@@ -180,7 +199,7 @@
     if (!r?.ok) return toast(erroDe(r, 'Não foi possível abrir o modelo do e-mail.'), true);
     modelo = r.modelo; padrao = r.padrao; personalizado = !!r.personalizado; sujo = false;
     preencher(modelo);
-    $('emFrame').srcdoc = '';
+    mostrarPrevia('');
     window.abrirModal?.(modal);
     mostrarTipo('incluido');
   });
