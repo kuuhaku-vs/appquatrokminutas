@@ -40,7 +40,7 @@
           <div class="ped-email" id="pedEmailAviso" hidden><span data-ico="mail"></span><span id="pedEmailTxt"></span> <button class="lg-link ped-email-btn" id="pedEmailBtn" type="button"></button></div>
           <div class="fgrid">
             <label class="field span2"><span>Quem está enviando</span><input id="pedDe" list="pessoasList" maxlength="80" autocomplete="off" title="Nome e setor de quem está mandando o envio (ex.: Mariana - Expedição). Comece a digitar para ver os nomes já usados." /></label>
-            <label class="field span2"><span>Para quem vai</span><input id="pedPara" list="pedParaList" maxlength="80" autocomplete="off" title="Só quem está no cadastro de destinatários. Comece a digitar e escolha um nome da lista." /><datalist id="pedParaList"></datalist></label>
+            <label class="field span2"><span>Para quem vai</span><input id="pedPara" class="pp-campo" maxlength="80" autocomplete="off" placeholder="Escolher destinatário" aria-haspopup="dialog" title="Só quem está no cadastro de destinatários. Clique para buscar e escolher." /><datalist id="pedParaList"></datalist></label>
             <div class="ped-bloq span2" id="pedParaBloq" role="alert" hidden><span data-ico="shield"></span><div><b id="pedParaBloqTit">Destinatário não cadastrado</b><small id="pedParaBloqTxt"></small></div><button class="ghost sm" id="pedParaCadastrar" type="button" hidden>Cadastrar</button></div>
             <label class="field"><span>Quantidade</span><input id="pedQtd" type="number" min="1" max="999" value="1" title="Quantos volumes ou itens vão neste envio (de 1 a 999)" /></label>
             <label class="field"><span>Conteúdo</span><select id="pedConteudo" title="Tipo do que vai ser enviado: envelope, pacote, caixa ou outros">${CONTEUDOS.map((c) => `<option>${c}</option>`).join('')}</select></label>
@@ -104,6 +104,15 @@
         <button class="primary" id="pedComEnviar" type="button" data-ico="send"><span>Enviar</span></button>
       </div>
       <p class="hint ped-com-nota" id="pedComNota"></p>
+    </div></div>
+    <div class="modal" id="mPedPara" aria-hidden="true"><div class="mbox sm-box pp-box" role="dialog" aria-modal="true" aria-labelledby="ppTitulo">
+      <div class="pp-alca" aria-hidden="true"></div>
+      <div class="m-head"><h3 id="ppTitulo">Para quem vai</h3><button class="ghost sm icon-btn" data-close type="button" title="Fechar" data-ico="close"><span class="sr">Fechar</span></button></div>
+      <div class="pp-topo">
+        <div class="pp-busca"><span data-ico="search"></span><input id="ppBusca" type="search" autocomplete="off" placeholder="Buscar por nome, setor ou e-mail" aria-controls="ppLista" /></div>
+        <div class="pp-recentes" id="ppRecentesBox" hidden><span class="pp-rotulo">Recentes</span><div class="pp-chips" id="ppRecentes"></div></div>
+      </div>
+      <div class="pp-lista" id="ppLista" role="listbox" aria-labelledby="ppTitulo"></div>
     </div></div>`);
   window.hidratarIcones?.();
 
@@ -114,7 +123,7 @@
   sino.title = 'Notificações dos comentários'; sino.setAttribute('aria-label', 'Notificações');
   sino.innerHTML = `${ico('bell')}<b class="notif-badge" id="notifBadge" hidden></b>`;
 
-  ['mPedidos', 'mPedRecusar', 'mPedReabrir', 'mPedComent'].forEach((id) => {
+  ['mPedidos', 'mPedRecusar', 'mPedReabrir', 'mPedComent', 'mPedPara'].forEach((id) => {
     const m = $(id);
     m.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => window.fecharModal?.(m)));
     m.addEventListener('mousedown', (e) => { if (e.target === m) window.fecharModal?.(m); });
@@ -336,6 +345,8 @@
     const r = await api.auth('destinatarios.listar');
     if (!r?.ok) { destinos = /minuta inválido|desconhecida|Ação inválida/i.test(r?.error || '') ? null : destinos; return; }
     destinos = (r.destinatarios || []).filter((d) => d.ativo);
+    $('pedPara').readOnly = true; // com o cadastro carregado, escolhe-se pela janela
+    if ($('mPedPara').classList.contains('open')) renderSeletor();
     $('pedParaList').innerHTML = destinos.map((d) => `<option value="${esc(d.nome)}">${esc(d.setor ? d.setor + ' · ' : '')}${esc(d.email)}</option>`).join('');
     conferirPara();
   }
@@ -366,6 +377,86 @@
   });
   window.addEventListener('gm-destinatarios-atualizados', () => carregarDestinos());
 
+  // ---------- Janela de escolha do destinatário (busca + recentes) ----------
+  const RECENTES_KEY = 'gm-ped-para-recentes';
+  const lerRecentes = () => { try { return JSON.parse(localStorage.getItem(RECENTES_KEY) || '[]'); } catch (e) { return []; } };
+  const guardarRecente = (nome) => { try { localStorage.setItem(RECENTES_KEY, JSON.stringify([nome, ...lerRecentes().filter((n) => normNome(n) !== normNome(nome))].slice(0, 5))); } catch (e) { /* sem armazenamento */ } };
+  const iniciais = (nome) => String(nome || '').trim().split(/\s+/).filter((w) => w.length > 2 || /^[A-ZÀ-Ú]/.test(w)).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+  const matiz = (nome) => { let h = 0; for (const c of normNome(nome)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+  let ppAtivo = 0, ppVisiveis = [];
+
+  function renderSeletor() {
+    const q = normNome($('ppBusca').value);
+    const atual = acharDestino($('pedPara').value);
+    const lista = destinos || [];
+    // Recentes: só quem ainda está no cadastro, e só quando não há busca.
+    const rec = q ? [] : lerRecentes().map((n) => lista.find((d) => normNome(d.nome) === normNome(n))).filter(Boolean);
+    $('ppRecentesBox').hidden = !rec.length;
+    $('ppRecentes').innerHTML = rec.map((d) => `<button type="button" class="pp-chip${atual === d ? ' on' : ''}" data-nome="${esc(d.nome)}">${esc(d.nome.split(/\s+/)[0])}</button>`).join('');
+    ppVisiveis = lista.filter((d) => !q || [d.nome, d.setor, d.email].some((v) => normNome(v).includes(q)))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    if (ppAtivo >= ppVisiveis.length) ppAtivo = Math.max(0, ppVisiveis.length - 1);
+    if (!ppVisiveis.length) {
+      const busca = $('ppBusca').value.trim();
+      const podeCad = pode('cadastros.editar');
+      $('ppLista').innerHTML = `<div class="pp-vazio"><span>${lista.length ? `Ninguém encontrado para "<b>${esc(busca)}</b>".` : 'Nenhum destinatário cadastrado ainda.'}</span>
+        ${podeCad ? `<button type="button" class="ghost sm" id="ppCadastrar" data-ico="plus"><span>Cadastrar${busca ? ` "${esc(busca)}"` : ''}</span></button>` : '<small>Peça para quem cuida dos cadastros incluir a pessoa.</small>'}</div>`;
+      window.hidratarIcones?.($('ppLista'));
+      return;
+    }
+    $('ppLista').innerHTML = (q ? '' : '<span class="pp-rotulo">Todos</span>') + ppVisiveis.map((d, i) => `
+      <button type="button" role="option" class="pp-item${i === ppAtivo ? ' ativo' : ''}${atual === d ? ' on' : ''}" aria-selected="${atual === d}" data-nome="${esc(d.nome)}" data-i="${i}">
+        <span class="pp-av" style="--h:${matiz(d.nome)}">${esc(iniciais(d.nome))}</span>
+        <span class="pp-txt"><b>${esc(d.nome)}</b><small>${esc([d.setor, d.email].filter(Boolean).join(' · '))}</small></span>
+        ${atual === d ? `<span class="pp-ok">${ico('check')}</span>` : ''}
+      </button>`).join('');
+  }
+  function abrirSeletor() {
+    if (destinos === null) return; // cadastro não carregou: o campo segue aceitando digitação
+    $('ppBusca').value = ''; ppAtivo = 0;
+    renderSeletor();
+    window.abrirModal?.($('mPedPara'));
+    $('ppLista').scrollTop = 0;
+    // No celular não abre o teclado sozinho: a lista fica à vista e a busca é opcional.
+    if (matchMedia('(pointer: fine)').matches) setTimeout(() => $('ppBusca').focus(), 40);
+  }
+  function escolher(nome) {
+    $('pedPara').value = nome;
+    window.fecharModal?.($('mPedPara'));
+    conferirPara();
+    $('pedQtd').focus();
+  }
+  $('pedPara').addEventListener('click', () => { if ($('pedPara').readOnly) abrirSeletor(); });
+  $('pedPara').addEventListener('keydown', (e) => {
+    if (!$('pedPara').readOnly) return;
+    if (['Enter', ' ', 'ArrowDown'].includes(e.key) || (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey)) {
+      e.preventDefault(); abrirSeletor();
+      if (e.key.length === 1 && e.key !== ' ') { $('ppBusca').value = e.key; renderSeletor(); }
+    }
+  });
+  $('ppBusca').addEventListener('input', () => { ppAtivo = 0; renderSeletor(); });
+  $('ppBusca').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!ppVisiveis.length) return;
+      ppAtivo = (ppAtivo + (e.key === 'ArrowDown' ? 1 : -1) + ppVisiveis.length) % ppVisiveis.length;
+      $('ppLista').querySelectorAll('.pp-item').forEach((el, i) => el.classList.toggle('ativo', i === ppAtivo));
+      $('ppLista').querySelector('.pp-item.ativo')?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (ppVisiveis[ppAtivo]) escolher(ppVisiveis[ppAtivo].nome);
+    }
+  });
+  $('mPedPara').addEventListener('click', (e) => {
+    const alvo = e.target.closest('[data-nome]');
+    if (alvo) return escolher(alvo.dataset.nome);
+    if (e.target.closest('#ppCadastrar')) {
+      const nome = $('ppBusca').value.trim();
+      window.fecharModal?.($('mPedPara'));
+      window.DESTINATARIOS?.novo?.({ nome }, (d) => { carregarDestinos().then(() => { if (d?.ativo) { $('pedPara').value = d.nome; conferirPara(); } }); });
+    }
+  });
+
   async function enviarPedido() {
     const pedido = { de: $('pedDe').value.trim(), para: $('pedPara').value.trim(), qtd: Number($('pedQtd').value) || 1, conteudo: $('pedConteudo').value, obs: $('pedObs').value.trim() };
     if (!pedido.de) { window.toast?.('Informe quem está enviando.', true); return $('pedDe').focus(); }
@@ -376,6 +467,7 @@
     const r = await api.auth('pedidos.criar', { pedido });
     b.disabled = false;
     if (!r?.ok) { if (r?.codigo === 'destinatario') carregarDestinos(); return window.toast?.(r?.error || 'Não foi possível enviar o pedido.', true); }
+    guardarRecente(r.pedido.para || pedido.para);
     pedidos.unshift(r.pedido); situacaoAnterior.set(r.pedido.id, 'AGUARDANDO'); conhecidos.add(r.pedido.id);
     $('pedPara').value = ''; $('pedQtd').value = 1; $('pedObs').value = ''; $('pedConteudo').value = 'Envelope'; conferirPara();
     render(); atualizarAvisos();
