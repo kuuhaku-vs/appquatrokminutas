@@ -64,8 +64,8 @@
   const semRede = (r) => !!r && !r.ok && !r.versao && !r.codigo;
 
   const pode = (p) => S.legado || !!S.usuario?.permissoes?.includes(p);
-  const podeTela = (v) => v === 'semacesso' || S.legado || (TELAS[v] || []).some(pode);
-  const primeiraTela = () => Object.keys(TELAS).find(podeTela) || 'semacesso';
+  const podeTela = (v) => v === 'semacesso' || S.legado || (v === 'inicio' ? Object.keys(TELAS).some((t) => (TELAS[t] || []).some(pode)) : (TELAS[v] || []).some(pode));
+  const primeiraTela = () => (podeTela('inicio') ? 'inicio' : 'semacesso'); // todo mundo com alguma tela começa no painel
   const emailValido = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
   const iniciais = (nome) => String(nome || '?').trim().split(/\s+/).slice(0, 2).map((x) => x[0] || '').join('').toUpperCase() || '?';
   const nomePerfil = (p) => (PERFIS[p] || PERFIS.personalizado).nome;

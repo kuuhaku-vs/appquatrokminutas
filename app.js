@@ -891,7 +891,7 @@ $('btnPreviewPrint').onclick = () => {
   }
 
   if (status) status.textContent = 'Sistema pronto';
-  go('nova');
+  go(document.getElementById('v-inicio') ? 'inicio' : 'nova');
   const remaining = Math.max(0, MIN_SPLASH_MS - (performance.now() - splashStart));
   await new Promise((resolve) => setTimeout(resolve, remaining));
   if (splash) splash.classList.add('is-hidden');
@@ -1128,7 +1128,7 @@ function executarAcaoPrincipal() {
   return false;
 }
 function navegarComAlt(n) {
-  const mapa = { '1':'nova', '2':'historico', '3':'config', '4':'pedidos' };
+  const mapa = { '0':'inicio', '1':'nova', '2':'historico', '3':'config', '4':'pedidos' };
   const destino = mapa[n];
   if (!destino) return false;
   const visivel = [...document.querySelectorAll(`[data-go="${destino}"]`)].some((el) => el.offsetParent !== null);
@@ -1219,7 +1219,7 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.altKey) return;
 
   // Navegação entre módulos: Alt+1…4.
-  if (e.altKey && !mod && /^Digit[1-4]$/.test(e.code) && navegarComAlt(e.code.slice(-1))) {
+  if (e.altKey && !mod && /^Digit[0-4]$/.test(e.code) && navegarComAlt(e.code.slice(-1))) {
     e.preventDefault();
     return;
   }
