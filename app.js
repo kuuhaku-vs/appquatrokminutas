@@ -366,7 +366,7 @@ function renderItens() {
 function abrirItem(i = -1) {
   editIdx = i; const it = itens[i] || { qtd: 1 };
   $('mItemTitle').textContent = i < 0 ? 'Adicionar Item' : 'Editar Item ' + (i + 1);
-  $('iPessoa').value = it.pessoa || ''; $('iRef').value = it.ref || ''; $('iQtd').value = it.qtd || 1; $('iConteudo').value = ['Envelope', 'Pacote', 'Caixa', 'Outros'].includes(it.conteudo) ? it.conteudo : 'Envelope'; $('iObs').value = it.obs || '';
+  $('iPessoa').value = it.pessoa || ''; $('iRef').value = it.ref || ''; $('iQtd').value = it.qtd || 1; $('iConteudo').value = ['Envelope', 'Pacote', 'Caixa', 'Desenvolvimento', 'Outros'].includes(it.conteudo) ? it.conteudo : 'Envelope'; $('iObs').value = it.obs || '';
   atualizarAutocompletes();
   $('iSalvarMais').style.display = i < 0 ? '' : 'none';
   abrirModal($('mItem')); setTimeout(() => $('iPessoa').focus(), 50);
@@ -508,7 +508,7 @@ function preencher(m, revisao = false) {
   $('numero').value = m.numero; $('data').value = m.dataISO || hoje();
   embalagens = normalizarEmbalagens(m); renderEmbalagens();
   $('dataEntrega').value = m.dataEntregaISO || m.dataISO || hoje(); $('horaEntrega').value = m.horaEntrega || ''; $('assinatura').value = m.assinatura || '';
-  partes = { remetente: { ...m.remetente }, destinatario: { ...m.destinatario } }; itens = (m.itens || []).map((x) => ({ pessoa: x.pessoa || '', ref: x.ref || '', qtd: x.qtd || 1, conteudo: ['Envelope', 'Pacote', 'Caixa', 'Outros'].includes(x.conteudo) ? x.conteudo : 'Outros', obs: x.obs || '' }));
+  partes = { remetente: { ...m.remetente }, destinatario: { ...m.destinatario } }; itens = (m.itens || []).map((x) => ({ pessoa: x.pessoa || '', ref: x.ref || '', qtd: x.qtd || 1, conteudo: ['Envelope', 'Pacote', 'Caixa', 'Desenvolvimento', 'Outros'].includes(x.conteudo) ? x.conteudo : 'Outros', obs: x.obs || '' }));
   renderPartes(); renderItens();
 }
 async function novaMinuta() {
@@ -1065,7 +1065,7 @@ $('btnProcessarLote').onclick = () => {
   for (let i=0;i<linhas.length;i++) {
     const p = linhas[i].split('|').map(x => x.trim());
     if (!p[0]) return toast(`Linha ${i+1}: informe o Rem. / Setor.`, true);
-    novos.push({ pessoa:p[0], ref:p[1]||'', qtd:Math.max(1,parseInt(p[2],10)||1), conteudo:['Envelope','Pacote','Caixa','Outros'].includes(p[3]) ? p[3] : 'Outros', obs:p[4]||'' });
+    novos.push({ pessoa:p[0], ref:p[1]||'', qtd:Math.max(1,parseInt(p[2],10)||1), conteudo:['Envelope','Pacote','Caixa','Desenvolvimento','Outros'].includes(p[3]) ? p[3] : 'Outros', obs:p[4]||'' });
   }
   itens.push(...novos); renderItens(); fecharModal($('mItensLote')); salvarRascunhoDebounced();
   toast(`${novos.length} item(ns) adicionado(s).`);

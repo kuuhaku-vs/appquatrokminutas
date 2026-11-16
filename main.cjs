@@ -364,7 +364,7 @@ function sincronizarHistoricoComPlanilha() {
         pessoa: get(row, 'Rem. / Setor', row[9]),
         ref: get(row, 'Dest. / Setor', row[10]),
         qtd: Math.max(1, parseInt(get(row, 'Qtd', row[11]), 10) || 1),
-        conteudo: ['Envelope', 'Pacote', 'Caixa', 'Outros'].includes(get(row, 'Conteudo', row[12])) ? get(row, 'Conteudo', row[12]) : 'Outros',
+        conteudo: ['Envelope', 'Pacote', 'Caixa', 'Desenvolvimento', 'Outros'].includes(get(row, 'Conteudo', row[12])) ? get(row, 'Conteudo', row[12]) : 'Outros',
         obs: get(row, 'Obs', row[13]),
       }));
 
