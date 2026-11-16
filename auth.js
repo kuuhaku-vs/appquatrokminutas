@@ -212,9 +212,11 @@
     <section id="v-semacesso" class="view">
       <section class="card"><div class="us-empty"><p><b>Seu usuário ainda não tem nenhuma tela liberada.</b></p><p>Peça ao administrador para definir suas permissões.</p></div></section>
     </section>`);
-  document.querySelector('.sb-nav [data-go="config"]')?.insertAdjacentHTML('afterend', '<button class="nav" data-go="usuarios" data-ico="users"><span>Usuários</span><b class="nav-badge" id="usBadge" hidden></b></button>');
-  document.querySelector('.sb-foot')?.insertAdjacentHTML('afterbegin', '<button class="sb-user" id="sbUser" type="button" title="Minha conta" hidden></button>');
-  document.querySelector('.m-top')?.insertAdjacentHTML('beforeend', '<button class="m-top-btn m-user" id="mTopUser" type="button" title="Minha conta" hidden></button>');
+  // Configurações saiu do menu: fica na engrenagem ao lado do usuário (barra lateral e topo do celular).
+  document.querySelector('#sbLabelSistema')?.insertAdjacentHTML('afterend', '<button class="nav" data-go="usuarios" data-ico="users"><span>Usuários</span><b class="nav-badge" id="usBadge" hidden></b></button>');
+  document.querySelector('.sb-foot')?.insertAdjacentHTML('afterbegin', '<div class="sb-conta"><button class="sb-user" id="sbUser" type="button" title="Minha conta" hidden></button><button class="sb-gear" data-go="config" type="button" title="Configurações (Alt+3)" aria-label="Configurações" data-ico="settings"></button></div>');
+  document.querySelector('.m-top')?.insertAdjacentHTML('beforeend', '<button class="m-top-btn m-gear" data-go="config" type="button" title="Configurações" aria-label="Configurações" data-ico="settings"></button><button class="m-top-btn m-user" id="mTopUser" type="button" title="Minha conta" hidden></button>');
+  window.hidratarIcones?.();
   document.querySelector('#cfgSheetsToken')?.closest('label')?.classList.add('campo-codigo');
   // O vínculo com o script do Google fica na tela de Usuários (só o administrador mexe).
   const cardSheets = $('cardSheets');

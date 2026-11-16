@@ -1131,8 +1131,8 @@ function navegarComAlt(n) {
   const mapa = { '1':'nova', '2':'historico', '3':'config', '4':'pedidos' };
   const destino = mapa[n];
   if (!destino) return false;
-  const nav = document.querySelector(`.nav[data-go="${destino}"]`);
-  if (!nav || nav.offsetParent === null) return false; // tela não existe ou não está liberada para este usuário
+  const visivel = [...document.querySelectorAll(`[data-go="${destino}"]`)].some((el) => el.offsetParent !== null);
+  if (!visivel) return false; // tela não existe ou não está liberada para este usuário
   go(destino);
   return true;
 }

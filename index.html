@@ -12,8 +12,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" /><meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Minutas 4K" /><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <script>try{if(localStorage.getItem('gm-tema')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
-<link rel="stylesheet" href="style.css?v=20261116-1320" />
-<link rel="stylesheet" href="auth.css?v=20261116-1320" />
+<link rel="stylesheet" href="style.css?v=20261116-1350" />
+<link rel="stylesheet" href="auth.css?v=20261116-1350" />
 </head>
 <body>
 
@@ -45,8 +45,7 @@
       <button class="nav" data-go="frete" id="btnFreteCortesia" type="button" data-ico="mail"><span>Frete cortesia</span></button>
       <span class="sb-label">Consulta</span>
       <button class="nav" data-go="historico" data-ico="history"><span>Histórico</span><kbd>Alt 2</kbd></button>
-      <span class="sb-label">Sistema</span>
-      <button class="nav" data-go="config" data-ico="settings"><span>Configurações</span><kbd>Alt 3</kbd></button>
+      <span class="sb-label" id="sbLabelSistema">Sistema</span>
     </nav>
 
     <div class="sb-foot">
@@ -507,18 +506,18 @@
 </div></div>
 
 <div id="toast"></div>
-<script src="config.js?v=20261116-1320"></script>
-<script src="web-api.js?v=20261116-1320"></script>
-<script src="ui.js?v=20261116-1320"></script>
-<script src="logo.js?v=20261116-1320"></script>
-<script src="print.js?v=20261116-1320"></script>
-<script src="frete-cortesia.js?v=20261116-1320"></script>
+<script src="config.js?v=20261116-1350"></script>
+<script src="web-api.js?v=20261116-1350"></script>
+<script src="ui.js?v=20261116-1350"></script>
+<script src="logo.js?v=20261116-1350"></script>
+<script src="print.js?v=20261116-1350"></script>
+<script src="frete-cortesia.js?v=20261116-1350"></script>
 <!-- O app.js é carregado pelo auth.js depois do login. -->
-<script src="auth.js?v=20261116-1320" data-app="app.js?v=20261116-1320"></script>
-<script src="pedidos.js?v=20261116-1320"></script>
-<script src="destinatarios.js?v=20261116-1320"></script>
-<script src="email-modelo.js?v=20261116-1320"></script>
-<script src="auditoria.js?v=20261116-1320"></script>
+<script src="auth.js?v=20261116-1350" data-app="app.js?v=20261116-1350"></script>
+<script src="pedidos.js?v=20261116-1350"></script>
+<script src="destinatarios.js?v=20261116-1350"></script>
+<script src="email-modelo.js?v=20261116-1350"></script>
+<script src="auditoria.js?v=20261116-1350"></script>
 <script>if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 </body>
 </html>
