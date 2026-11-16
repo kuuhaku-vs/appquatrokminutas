@@ -132,7 +132,7 @@ const CAB_EMAILS = ['ID', 'Criado em', 'Tipo', 'Situação', 'Gerado por', 'Nome
 const CAB_COMENTARIOS = ['Pedido', 'Data', 'Usuário', 'Nome', 'Comentário'];
 const CAB_AUDITORIA = ['Data', 'Usuário', 'Nome', 'Ação', 'Alvo', 'Detalhes'];
 const MAX_AUDITORIA = 20000; // linhas guardadas na aba Auditoria (as mais antigas saem)
-const VERSAO_SCRIPT = '3.6';
+const VERSAO_SCRIPT = '3.7';
 
 // ---------- Avisos por e-mail ----------
 const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
@@ -217,7 +217,7 @@ function processar(req, ss, ctx) {
     if (req.acao === 'usuarios.auditoria') { exigir(quem, 'usuarios.gerenciar'); return (lerAuditoria(ss, req)); }
     if (req.acao === 'usuarios.listar') { exigir(quem, 'usuarios.gerenciar'); return ({ ok: true, usuarios: usuarios.map(publico), permissoes: PERMISSOES, perfis: PERFIS }); }
     if (req.acao === 'usuarios.salvar') { exigir(quem, 'usuarios.gerenciar'); return (salvarUsuario(ss, abaU, usuarios, quem, req)); }
-    if (req.acao === 'usuarios.emailmodelo') { exigir(quem, 'usuarios.gerenciar'); const mm = lerModeloEmail(); return ({ ok: true, modelo: mm.modelo, personalizado: mm.personalizado, padrao: modeloEmailPadrao() }); }
+    if (req.acao === 'usuarios.emailmodelo') { exigir(quem, 'usuarios.gerenciar'); const mm = lerModeloEmail(); return ({ ok: true, modelo: mm.modelo, personalizado: mm.personalizado, padrao: modeloEmailPadrao(), contaEnvio: contaQueEnvia() }); }
     if (req.acao === 'usuarios.emailsalvar') { exigir(quem, 'usuarios.gerenciar'); return (salvarModeloEmail(req)); }
     if (req.acao === 'usuarios.emailprevia') { exigir(quem, 'usuarios.gerenciar'); return (previaEmail(req, quem)); }
     if (req.acao === 'usuarios.emailteste') { exigir(quem, 'usuarios.gerenciar'); return (testeEmail(req, quem)); }
@@ -234,6 +234,9 @@ function processar(req, ss, ctx) {
 
     const abaM = obterAba(ss, ABA_MINUTAS, CAB_MINUTAS);
     const abaI = obterAba(ss, ABA_ITENS, CAB_ITENS);
+
+    // Envio semi-manual do aviso de despacho (botão na minuta e no Histórico): gera o pendente para conferir.
+    if (req.acao === 'emails.despacho') return (gerarAvisoDespacho(ss, abaM, abaI, quem, req));
 
     if (req.acao === 'teste') return ({ ok: true, versao: VERSAO_SCRIPT, planilha: ss.getName(), url: ss.getUrl() });
 
@@ -1034,6 +1037,7 @@ function auditar(ss, quem, req, res) {
   else if (a === 'destinatarios.excluir') linha = ['Excluiu destinatário de e-mail', res.excluido || '', ''];
   else if (a === 'destinatarios.importar') linha = ['Importou destinatários de e-mail', res.importados + (res.importados === 1 ? ' destinatário' : ' destinatários'), 'Usuários com e-mail'];
   else if (a === 'emails.enviar') linha = ['Enviou e-mail conferido', res.assunto || '', 'Para ' + (res.para || []).join(', ')];
+  else if (a === 'emails.despacho') linha = ['Gerou aviso de despacho para conferir', 'Minuta nº ' + (req.numero || ''), res.existente ? 'Já havia um pendente' : ''];
   else if (a === 'emails.descartar') linha = ['Descartou e-mail sem enviar', res.assunto || res.resumo || '', ''];
   else if (a === 'registrar') linha = [res.alterada ? 'Alterou minuta' : 'Registrou minuta', 'Minuta nº ' + m.numero,
     [res.qtdItens + (res.qtdItens === 1 ? ' item' : ' itens'), m.destinatario ? 'para ' + m.destinatario : '', res.pedidosIncluidos ? res.pedidosIncluidos + ' pedido(s) incluído(s)' : '', req.pdf && req.pdf.base64 ? 'com PDF' : ''].filter(String).join(' · ')];
@@ -1748,6 +1752,30 @@ function avisarDespacho(ss, m, itens, numeroTexto, quem, novosPedidos, alterada)
     if (id) out.pendentes.push(id);
   } catch (err) { console.error('E-mail de malote despachado não gerado: ' + ((err && err.message) || err)); }
   return out;
+}
+
+// Conta Google que envia os e-mails (quem publicou o App da Web com "Executar como: Eu").
+function contaQueEnvia() { try { return Session.getEffectiveUser().getEmail() || ''; } catch (e) { return ''; } }
+
+// Botão "Enviar aviso de despacho": monta o aviso de uma minuta já registrada e deixa PENDENTE para conferir.
+// Se já houver um aviso pendente dessa minuta, devolve o mesmo (não duplica).
+function gerarAvisoDespacho(ss, abaM, abaI, quem, req) {
+  if (quem.permissoes.indexOf('minutas.criar') < 0 && quem.permissoes.indexOf('minutas.editar') < 0 && quem.permissoes.indexOf('emails.enviar') < 0)
+    throw erroAcesso('permissao', 'Você não tem permissão para enviar o aviso de despacho.');
+  const num = normalizarNumero(req.numero);
+  if (!num) throw erroAcesso('minuta', 'Informe o número da minuta.');
+  const m = listarMinutas(ss, abaM, abaI).filter(function (x) { return normalizarNumero(x.numero) === num; })[0];
+  if (!m) throw erroAcesso('minuta', 'A minuta nº ' + req.numero + ' ainda não foi registrada. Registre (ou gere o PDF) antes de enviar o aviso.');
+  if (!m.itens.length) throw erroAcesso('minuta', 'A minuta nº ' + m.numero + ' não tem itens para avisar.');
+  if (!lerModeloEmail().modelo.ativo) throw erroAcesso('email', 'Os avisos por e-mail estão desligados (modelo do e-mail, em Usuários).');
+  const ja = lerFilaEmails(ss).lista.filter(function (e) {
+    return e.tipo === 'despachado' && e.situacao === EM_PENDENTE && normalizarNumero((e.dados && e.dados.extra && e.dados.extra.minuta) || '') === num;
+  })[0];
+  if (ja) return { ok: true, emails: [ja.id], existente: true };
+  const pedidosDaMinuta = lerPedidos(ss).lista.filter(function (p) { return p.situacao === SIT_INCLUIDO && normalizarNumero(p.minuta) === num; });
+  const r = avisarDespacho(ss, m, m.itens, String(m.numero), quem, pedidosDaMinuta, false);
+  if (!r.pendentes.length) throw erroAcesso('email', 'Não foi possível montar o aviso de despacho desta minuta.');
+  return { ok: true, emails: r.pendentes };
 }
 
 // Regra de todos os avisos:

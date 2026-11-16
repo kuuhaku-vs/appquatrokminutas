@@ -207,6 +207,7 @@
     $('emResumo').textContent = r.modelo.ativo
       ? `Aviso geral de malote despachado${r.modelo.despachado?.ativo === false ? ' (desligado)' : ''} para todos os envolvidos (conferido antes de enviar), avisos de pedido recusado, reaberto e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Quem pediu recebe automático; os outros destinatários só depois de conferido (tela Destinatários). Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
       : 'Os avisos por e-mail estão desligados. Abra o modelo para ligar de novo.';
+    if (r.contaEnvio) $('emResumo').insertAdjacentHTML('beforeend', `<span class="em-conta">Os e-mails saem da conta <b>${String(r.contaEnvio).replace(/[<>&"]/g, '')}</b> (quem publicou o script do Google).</span>`);
   }
   const AUTH = window.AUTH;
   if (AUTH && typeof AUTH.renderUsuarios === 'function') {

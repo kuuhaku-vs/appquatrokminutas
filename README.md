@@ -21,7 +21,7 @@ O mesmo código roda de dois jeitos:
 - **Para quem vai**: janela de escolha com busca e destinatários recentes.
 - Novo conteúdo **Desenvolvimento** nos pedidos e itens.
 - No celular, a barra de baixo tem 4 telas + **Mais**.
-- E-mail **Malote despachado**: ao registrar a minuta, abre a conferência de um aviso único com o malote inteiro, com todos os envolvidos já marcados (quem pediu, quem recebe cada item e quem está "Sempre em cópia"). Só sai depois de conferido (v3.6). Substitui o aviso de "pedido incluído". **Precisa do `GoogleSheets_Script.gs` 3.6 publicado no Apps Script.**
+- E-mail **Malote despachado**: ao registrar a minuta, abre a conferência de um aviso único com o malote inteiro, com todos os envolvidos já marcados (quem pediu, quem recebe cada item e quem está "Sempre em cópia"). Só sai depois de conferido (v3.6). Substitui o aviso de "pedido incluído". Botão **Avisar** na minuta, no Histórico e na janela de detalhes gera o aviso de qualquer minuta registrada, também com conferência (v3.7). O editor do modelo de e-mail mostra de qual conta os e-mails saem. **Precisa do `GoogleSheets_Script.gs` 3.7 publicado no Apps Script.**
 - Programa do Windows mostra o ícone do Gerador na janela e na barra de tarefas (`icon.ico`).
 
 ## No celular

@@ -641,7 +641,7 @@ async function renderHist() {
   $('histSummary').innerHTML = `<span class="summary-chip">${list.length} minuta(s)</span><span class="summary-chip">${totalVolumes} volume(s)</span><span class="summary-chip">${totalItens} item(ns)</span>`;
 
   $('histBody').innerHTML = list.map((h) => `<tr data-num="${esc(h.numero)}" tabindex="0" title="Ver o que foi enviado"><td><span class="history-number">${esc(h.numero)}</span></td><td>${esc(h.data)}</td><td>${esc(h.volumes)}</td><td><span class="history-count">${(h.itens || []).length}</span></td><td>${esc([...new Set((h.itens || []).map((i) => i.pessoa).filter(Boolean))].join(', '))}</td>
-    <td class="act history-actions"><button title="Ver o que foi enviado" data-v="${esc(h.numero)}">${ICO('eye')}<span>Ver</span></button><button title="Abrir / reeditar" data-o="${esc(h.numero)}">${ICO('edit')}<span>Abrir</span></button><button title="Duplicar minuta" data-dup="${esc(h.numero)}">${ICO('copy')}<span>Duplicar</span></button>${h.pdf ? `<button title="Abrir PDF" data-p="${esc(h.numero)}">${ICO('file')}<span>PDF</span></button>` : ''}<button class="del-history" title="Excluir minuta da planilha" data-x="${esc(h.numero)}">${ICO('trash')}</button></td></tr>`).join('') || '<tr><td colspan="6" class="hint">Nenhuma minuta encontrada com os filtros atuais.</td></tr>';
+    <td class="act history-actions"><button title="Ver o que foi enviado" data-v="${esc(h.numero)}">${ICO('eye')}<span>Ver</span></button><button title="Abrir / reeditar" data-o="${esc(h.numero)}">${ICO('edit')}<span>Abrir</span></button><button title="Duplicar minuta" data-dup="${esc(h.numero)}">${ICO('copy')}<span>Duplicar</span></button><button class="aviso-despacho" title="Enviar aviso de despacho (confere antes de enviar)" data-av="${esc(h.numero)}">${ICO('send')}<span>Avisar</span></button>${h.pdf ? `<button title="Abrir PDF" data-p="${esc(h.numero)}">${ICO('file')}<span>PDF</span></button>` : ''}<button class="del-history" title="Excluir minuta da planilha" data-x="${esc(h.numero)}">${ICO('trash')}</button></td></tr>`).join('') || '<tr><td colspan="6" class="hint">Nenhuma minuta encontrada com os filtros atuais.</td></tr>';
 
   // Clicar na linha (ou em "Ver") abre a janela com tudo o que foi enviado.
   $('histBody').querySelectorAll('tr[data-num]').forEach((tr) => {
@@ -663,6 +663,7 @@ async function renderHist() {
     salvarRascunhoDebounced();
   }));
   $('histBody').querySelectorAll('[data-p]').forEach((b) => (b.onclick = () => api.abrirPDF(hist.find((h) => h.numero === b.dataset.p).pdf)));
+  $('histBody').querySelectorAll('[data-av]').forEach((b) => (b.onclick = () => enviarAvisoDespacho(b.dataset.av, b)));
   $('histBody').querySelectorAll('[data-x]').forEach((b) => (b.onclick = async () => {
     const minuta = hist.find((h) => h.numero === b.dataset.x);
     if (!minuta) return;
@@ -714,6 +715,24 @@ function abrirDetalheMinuta(h) {
   $('detBody').scrollTop = 0;
 }
 $('detPdf').onclick = () => { const h = hist.find((x) => x.numero === detalheAtual); if (h?.pdf) api.abrirPDF(h.pdf); };
+$('detAviso').onclick = () => { if (detalheAtual) { fecharModal($('mDetalhe')); enviarAvisoDespacho(detalheAtual, $('detAviso')); } };
+$('btnAvisoDespacho').onclick = () => enviarAvisoDespacho($('numero').value, $('btnAvisoDespacho'));
+
+// Envio semi-manual do aviso de "malote despachado": o script monta o aviso da minuta
+// registrada e a janela de conferência abre com todos os envolvidos marcados.
+async function enviarAvisoDespacho(numero, botao) {
+  numero = String(numero || '').trim();
+  if (!numero) return toast('Informe o número da minuta.', true);
+  if (typeof api?.auth !== 'function' || !window.EMAILS?.conferir) return toast('O aviso de despacho precisa do login de usuários e do script do Google 3.7.', true);
+  if (botao) botao.disabled = true;
+  toast(`Montando o aviso de despacho da minuta nº ${numero}…`);
+  try {
+    const r = await api.auth('emails.despacho', { numero });
+    if (!r?.ok) return toast(/Ação desconhecida/i.test(r?.error || '') ? 'Atualize o script do Google para a versão 3.7 para usar o aviso de despacho.' : (r?.error || 'Não foi possível montar o aviso de despacho.'), true);
+    if (r.existente) toast('Este aviso já estava aguardando conferência. Confira e envie.');
+    await window.EMAILS.conferir(r.emails);
+  } finally { if (botao) botao.disabled = false; }
+}
 ['detEditar:data-o', 'detDuplicar:data-dup'].forEach((par) => {
   const [id, attr] = par.split(':');
   $(id).onclick = () => { const b = [...$('histBody').querySelectorAll(`[${attr}]`)].find((x) => x.getAttribute(attr) === detalheAtual); fecharModal($('mDetalhe')); b?.click(); };
