@@ -335,7 +335,7 @@
     const busca = $('ecBusca').value.trim().toLowerCase();
     const sug = new Set(e.sugeridos), cop = new Set(e.copias || []);
     $('ecJa').hidden = !e.jaEnviado;
-    $('ecJa').innerHTML = e.jaEnviado ? `${ico('check')}<span>Já enviado automaticamente para <b>${esc(e.jaEnviado)}</b>. Marque quem mais deve receber uma cópia.</span>` : '';
+    $('ecJa').innerHTML = e.jaEnviado ? `${ico('check')}<span>Já enviado automaticamente para <b>${esc(e.jaEnviado)}</b>. Marque quem mais deve receber este e-mail.</span>` : '';
     const lista = dests
       .filter((d) => !busca || sel.has(d.id) || [d.nome, d.email, d.setor].join(' ').toLowerCase().includes(busca))
       .sort((a, b) => ((sug.has(b.id) || cop.has(b.id)) - (sug.has(a.id) || cop.has(a.id))) || a.nome.localeCompare(b.nome, 'pt-BR'));

@@ -72,6 +72,8 @@ Quando um pedido de envio é **incluído** numa minuta (ao gerar o PDF ou regist
 ## E-mails automáticos, conferidos e destinatários (v3.2)
 **Quem fez o pedido recebe automático** (como antes) os avisos de pedido **incluído** na minuta (ao gerar o PDF ou registrar), **recusado**, **reaberto**, **comentário** de quem monta o malote e **lembrete** de pedido parado (só os pedidos dele). O e-mail é o do cadastro em **Usuários**/**Minha conta**; se não tiver, vale o do destinatário ligado ao usuário dele. Tudo fica registrado na aba **Emails** como *Automático*.
 
+**Ao gerar o PDF ou registrar a minuta** com pedidos, a janela de conferência abre sempre, já com **quem vai receber o envio** (o "Para" do pedido, ex.: Kaue) marcado, se estiver no cadastro de destinatários (v3.3).
+
 **Qualquer outra pessoa** (gestor, outro setor, quem monta o malote quando quem pediu comenta) **só recebe depois de conferido**:
 
 - Logo depois da ação abre a janela **Conferir e-mail antes de enviar**: prévia da mensagem e a lista **Para quem vai**, com caixas de marcar do cadastro de destinatários. Não há campo para digitar endereço. Quando quem pediu já recebeu, a janela avisa "Já enviado automaticamente para…".
@@ -80,7 +82,7 @@ Quando um pedido de envio é **incluído** numa minuta (ao gerar o PDF ou regist
 - Se quem pediu não tem e-mail, o aviso não sai automático: vira pendência, com o botão **Cadastrar** para incluir a pessoa no cadastro.
 - **Tela Destinatários** (menu, ao lado de Envio): **E-mails para conferir** (pendentes, enviados, automáticos e descartados recentes) e o **Cadastro de destinatários**: nome, e-mail, setor, usuário do Gerador (opcional), ativo e *Sempre em cópia*. **Importar usuários** traz quem já tem e-mail em Usuários.
 - Permissões: *Alterar cadastros* gerencia o cadastro. *Conferir e enviar e-mails* (Administrador e Operador têm) vê e envia as pendências de todos. Sem ela, a pessoa confere só as das próprias ações.
-- Abas **Destinatarios** e **Emails** na planilha. Precisa do script do Google **3.2**.
+- Abas **Destinatarios** e **Emails** na planilha. Precisa do script do Google **3.3**.
 
 ## Reabrir pedido e notificações (v3.0)
 - **Reabrir:** pedido **recusado** (ou cancelado) ganha o botão **Reabrir** em "Atendidos recentemente". Ele volta para a fila de aguardando, para entrar num malote posterior, com uma observação opcional. A reabertura fica registrada na conversa do pedido e quem pediu recebe o e-mail **Reaberto** (editável no modelo). Quem monta o malote reabre qualquer pedido; quem pediu reabre só os que ele mesmo cancelou.

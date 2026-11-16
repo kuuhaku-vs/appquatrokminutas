@@ -98,6 +98,8 @@
  *     incluído, recusado, reaberto, comentário da Expedição e lembrete de
  *     pedido parado, no e-mail do cadastro de usuários (ou do destinatário
  *     ligado ao usuário dele). Fica registrado na aba "Emails" como ENVIADO.
+ *   • AO GERAR A MINUTA, a conferência abre sempre, já com quem vai receber
+ *     o envio (o "Para" do pedido) marcado, se estiver no cadastro (3.3).
  *   • QUALQUER OUTRO DESTINATÁRIO (gestor, outro setor...) só recebe depois
  *     de conferido: o aviso entra na aba "Emails" como PENDENTE e o Gerador
  *     abre a janela "Conferir e-mail" (prévia + destinatários para marcar).
@@ -128,7 +130,7 @@ const CAB_EMAILS = ['ID', 'Criado em', 'Tipo', 'Situação', 'Gerado por', 'Nome
 const CAB_COMENTARIOS = ['Pedido', 'Data', 'Usuário', 'Nome', 'Comentário'];
 const CAB_AUDITORIA = ['Data', 'Usuário', 'Nome', 'Ação', 'Alvo', 'Detalhes'];
 const MAX_AUDITORIA = 20000; // linhas guardadas na aba Auditoria (as mais antigas saem)
-const VERSAO_SCRIPT = '3.2';
+const VERSAO_SCRIPT = '3.3';
 
 // ---------- Avisos por e-mail ----------
 const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
@@ -1203,7 +1205,9 @@ function avisarPedidosPorEmail(ss, pedidos, tipo, quem) {
     pedidos.forEach(function (p) { (porUsuario[p.usuario] = porUsuario[p.usuario] || []).push(p); });
     Object.keys(porUsuario).forEach(function (login) {
       const dono = usuarios.filter(function (u) { return u.usuario === login; })[0] || { usuario: login, nome: porUsuario[login][0].nome };
-      const r = avisar(ss, usuarios, tipo, porUsuario[login], quem, {}, { dono: dono });
+      // Pedido incluído: a conferência abre sempre, já com quem vai receber o envio ("Para") marcado.
+      const opts = tipo === 'incluido' ? { dono: dono, extras: destinatariosDoPara(ss, porUsuario[login]), sempre: true } : { dono: dono };
+      const r = avisar(ss, usuarios, tipo, porUsuario[login], quem, {}, opts);
       out.pendentes = out.pendentes.concat(r.pendentes); out.automaticos += r.automaticos;
     });
   } catch (err) {
@@ -1671,10 +1675,27 @@ function avisar(ss, usuarios, tipo, pedidos, quem, extra, opts) {
     }
     const sugeridos = (opts.extras || []).slice();
     if (contato && !enviado) sugeridos.unshift(contato);
-    if (sugeridos.length || destinatariosEmCopia(ss).length) {
+    if (opts.sempre || sugeridos.length || destinatariosEmCopia(ss).length) {
       const id = enfileirarEmail(ss, tipo, pedidos, quem, extra, sugeridos, { jaEnviado: enviado ? contato.nome + ' <' + contato.email + '>' : '' });
       if (id) out.pendentes.push(id);
     }
   } catch (err) { console.error('Aviso por e-mail: ' + ((err && err.message) || err)); }
   return out;
+}
+
+// Destinatários do cadastro que batem com o "Para" dos pedidos (ex.: "Kaue" ou "Sheila - Recepção").
+function normNome(v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+function destinatariosDoPara(ss, pedidos) {
+  const lista = lerDestinatarios(ss).lista.filter(function (d) { return d.ativo && d.email; });
+  const out = [];
+  pedidos.forEach(function (p) {
+    const para = normNome(p.para), base = para.split(' - ')[0].trim();
+    if (!para) return;
+    lista.forEach(function (d) {
+      const nome = normNome(d.nome), nomeBase = nome.split(' - ')[0].trim();
+      const bate = nome === para || nomeBase === base || (d.setor && normNome(d.nome + ' - ' + d.setor) === para);
+      if (bate && out.indexOf(d) < 0) out.push(d);
+    });
+  });
+  return out.map(function (d) { return { usuario: d.usuario, nome: d.nome, email: d.email }; });
 }
