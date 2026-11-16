@@ -1,7 +1,9 @@
 /* =========================================================
-   GERADOR DE MINUTAS · DESTINATÁRIOS E E-MAILS CONFERIDOS (v3.1)
-   - Nenhum aviso por e-mail sai sozinho: o script do Google guarda cada
-     aviso como PENDENTE e aqui ele é conferido antes do envio.
+   GERADOR DE MINUTAS · DESTINATÁRIOS E E-MAILS CONFERIDOS (v3.2)
+   - Quem fez o pedido recebe os avisos automático (o script do Google envia).
+   - Qualquer outro destinatário (gestor etc.) só recebe depois de conferido:
+     o script guarda o aviso como PENDENTE e aqui ele é conferido.
+     "Agora não" deixa a pendência no sino de notificações.
    - Janela "Conferir e-mail": prévia da mensagem de verdade e a lista
      de destinatários cadastrados para marcar (não há caixa para digitar
      endereço). Só sai quando alguém clica em Enviar.
@@ -45,10 +47,10 @@
             <h3 data-ico="send"><span>E-mails para conferir</span> <span class="section-counter" id="dsFilaCont">0</span></h3>
             <div class="card-actions"><button class="primary" id="dsConferirTodos" type="button" data-ico="eye" hidden><span>Conferir todos</span></button></div>
           </div>
-          <p class="hint ds-hint">Nenhum aviso sai sozinho. Confira a mensagem, marque quem recebe e clique em <b>Enviar</b>. Só aparecem para marcar as pessoas do cadastro ao lado.</p>
+          <p class="hint ds-hint">Quem fez o pedido recebe o aviso automático. Para qualquer outra pessoa (gestor, outro setor) o e-mail fica aqui: confira a mensagem, marque quem recebe e clique em <b>Enviar</b>. Só aparecem para marcar as pessoas do cadastro ao lado.</p>
           <div class="note" id="dsAvisosOff" data-ico="info" hidden><span>Os avisos por e-mail estão desligados no modelo (Usuários › Aviso por e-mail). Enquanto estiverem desligados, nenhum e-mail novo entra aqui.</span></div>
           <div id="dsFila" class="ped-lista"></div>
-          <span class="sub-title ped-sub">Enviados e descartados recentemente</span>
+          <span class="sub-title ped-sub">Enviados (inclusive os automáticos) e descartados recentemente</span>
           <div id="dsRecentes" class="ped-lista"></div>
         </section>
         <section class="card" id="dsCadCard">
@@ -77,6 +79,7 @@
           <div class="ec-para-head"><span class="sub-title">Para quem vai</span><span class="ec-cont" id="ecCont"></span></div>
           <label class="search" data-ico="search"><input id="ecBusca" type="search" placeholder="Filtrar destinatários…" autocomplete="off" /></label>
           <div class="ec-marcar"><button class="lg-link" id="ecTodos" type="button">Marcar todos</button><button class="lg-link" id="ecNenhum" type="button">Desmarcar</button></div>
+          <div class="ec-ja" id="ecJa" hidden></div>
           <div id="ecLista" class="ec-lista"></div>
           <div id="ecFaltam" class="ec-faltam"></div>
           <button class="ghost sm ec-novo" id="ecNovoDest" type="button" data-ico="plus"><span>Cadastrar destinatário</span></button>
@@ -102,9 +105,9 @@
           <label class="field span2"><span>E-mail</span><input id="dsEmail" type="email" maxlength="120" autocomplete="off" title="Endereço que recebe os e-mails do Gerador" /></label>
           <label class="field"><span>Setor <i>(opcional)</i></span><input id="dsSetor" maxlength="80" autocomplete="off" /></label>
           <label class="field"><span>Usuário do Gerador <i>(opcional)</i></span><input id="dsUsuario" maxlength="40" autocomplete="off" spellcheck="false" title="Login da pessoa no Gerador. Com ele, a pessoa já vem marcada nos avisos dos pedidos dela." /></label>
-          <div class="field span2"><div class="chips-check"><label><input type="checkbox" id="dsAtivo" checked /><span>Ativo (aparece para marcar nos envios)</span></label></div></div>
+          <div class="field span2"><div class="chips-check"><label><input type="checkbox" id="dsAtivo" checked /><span>Ativo (aparece para marcar nos envios)</span></label><label title="Gestor ou alguém que precisa acompanhar: já vem marcado em todo e-mail para conferir, inclusive a cópia dos avisos automáticos"><input type="checkbox" id="dsCopia" /><span>Sempre em cópia</span></label></div></div>
         </div>
-        <p class="hint">Com o <b>usuário do Gerador</b> preenchido, a pessoa já aparece marcada quando o aviso é sobre um pedido dela.</p>
+        <p class="hint">Com o <b>usuário do Gerador</b> preenchido, a pessoa recebe automático os avisos dos pedidos dela (se não tiver e-mail em Usuários). <b>Sempre em cópia</b>: para gestor ou quem precisa acompanhar. Ele já vem marcado na conferência de cada aviso, sem precisar entrar como pedido de envio.</p>
       </div>
       <div class="m-foot"><button class="ghost" data-close type="button">Cancelar</button><button class="primary" id="dsSalvar" type="button" data-ico="save"><span>Salvar</span></button></div>
     </div></div>`);
@@ -170,6 +173,7 @@
   }
 
   function atualizarBadge() {
+    window.dispatchEvent(new Event('gm-emails-atualizados'));
     const b = $('dsBadge');
     if (!b) return;
     const n = indisponivel ? 0 : fila.length;
@@ -182,14 +186,14 @@
     if (!p.length) return esc(e.resumo);
     return `<b>${esc(p[0].de)}</b><span aria-hidden="true">→</span><b>${esc(p[0].para)}</b>${p.length > 1 ? ` <small>e mais ${p.length - 1}</small>` : ''}`;
   };
-  const nomesSugeridos = (e) => e.sugeridos.map((id) => dests.find((d) => d.id === id)?.nome).filter(Boolean);
+  const nomesSugeridos = (e) => [...new Set([...e.sugeridos, ...(e.copias || [])])].map((id) => dests.find((d) => d.id === id)?.nome).filter(Boolean);
 
   function linhaFila(e) {
     const sug = nomesSugeridos(e);
     const extra = e.extra?.comentario ? `<div class="det-obs">${esc(e.extra.autor)}: ${esc(e.extra.comentario)}</div>`
       : e.extra?.nota ? `<div class="det-obs">${esc(e.extra.nota)}</div>`
       : e.tipo === 'recusado' && e.pedidos[0]?.motivo ? `<div class="det-obs">Motivo: ${esc(e.pedidos[0].motivo)}</div>` : '';
-    const para = sug.length ? 'Sugerido para ' + sug.map(esc).join(', ') : (e.semCadastro.length ? `${esc(e.semCadastro.map((s) => s.nome).join(', '))} não ${e.semCadastro.length === 1 ? 'está' : 'estão'} no cadastro` : 'Escolha os destinatários ao conferir');
+    const para = (e.jaEnviado ? `Já enviado automático para ${esc(e.jaEnviado.replace(/\s*<.*$/, ''))} · ` : '') + (sug.length ? (e.jaEnviado ? 'cópia para ' : 'Sugerido para ') + sug.map(esc).join(', ') : (e.semCadastro.length ? `${esc(e.semCadastro.map((s) => s.nome).join(', '))} não ${e.semCadastro.length === 1 ? 'está' : 'estão'} no cadastro` : 'Escolha os destinatários ao conferir'));
     return `<div class="ped-item">
       <div class="ped-main">
         <div class="ped-estado"><span class="perm-chip ${COR_TIPO[e.tipo] || ''}">${esc(e.nomeTipo)}</span>${e.pedidos[0]?.minuta ? ` <span class="perm-chip">Minuta nº ${esc(e.pedidos[0].minuta)}</span>` : ''}</div>
@@ -204,12 +208,12 @@
     </div>`;
   }
   function linhaRecente(e) {
-    const enviado = e.situacao === 'ENVIADO';
+    const enviado = e.situacao === 'ENVIADO', auto = e.enviadoPor === 'Automático';
     return `<div class="ped-item feito">
       <div class="ped-main">
-        <div class="ped-estado"><span class="perm-chip ${enviado ? 'ok' : ''}">${enviado ? 'Enviado' : 'Descartado'}</span> <span class="perm-chip">${esc(e.nomeTipo)}</span></div>
+        <div class="ped-estado"><span class="perm-chip ${enviado ? 'ok' : ''}">${auto ? 'Automático' : enviado ? 'Enviado' : 'Descartado'}</span> <span class="perm-chip">${esc(e.nomeTipo)}</span></div>
         <div class="ped-rota">${enviado && e.assunto ? `<b>${esc(e.assunto)}</b>` : resumoPedidos(e)}</div>
-        <small>${enviado ? 'Enviado' : 'Descartado'} por ${esc(e.enviadoPor)} · ${esc(e.enviadoEm)}</small>
+        <small>${auto ? 'Enviado automaticamente para quem pediu' : (enviado ? 'Enviado' : 'Descartado') + ' por ' + esc(e.enviadoPor)} · ${esc(e.enviadoEm)}</small>
         ${enviado && e.destinatarios ? `<small class="ds-para">Para: ${esc(e.destinatarios)}</small>` : ''}
       </div>
     </div>`;
@@ -232,7 +236,7 @@
     $('dsLista').innerHTML = lista.length ? lista.map((d) => `
       <div class="ds-row${d.ativo ? '' : ' off'}">
         <div class="us-who"><span class="avatar">${esc(iniciais(d.nome))}</span><div><strong>${esc(d.nome)}</strong><small>${esc(d.email)}${d.setor ? ' · ' + esc(d.setor) : ''}${d.usuario ? ' · @' + esc(d.usuario) : ''}</small></div></div>
-        ${d.ativo ? '' : '<span class="perm-chip off">Inativo</span>'}
+        <span class="ds-chips">${d.copia ? '<span class="perm-chip all">Sempre em cópia</span>' : ''}${d.ativo ? '' : '<span class="perm-chip off">Inativo</span>'}</span>
         ${podeEditar ? `<div class="act"><button type="button" data-ds-editar="${esc(d.id)}" title="Editar">${ico('edit')}<span>Editar</span></button><button type="button" class="del" data-ds-excluir="${esc(d.id)}" title="Excluir">${ico('trash')}<span>Excluir</span></button></div>` : ''}
       </div>`).join('')
       : `<div class="us-empty">${todos.length ? 'Nenhum destinatário encontrado.' : `Nenhum destinatário cadastrado ainda.${podeEditar ? ' Clique em <b>Novo destinatário</b> ou em <b>Importar usuários</b> para trazer quem já tem e-mail no Gerador.' : ' Peça para quem cuida dos cadastros incluir as pessoas.'}`}</div>`;
@@ -249,12 +253,12 @@
     editando = d && d.id ? d : null; aoSalvar = depois || null;
     $('dsEdTitulo').textContent = editando ? 'Editar destinatário' : 'Novo destinatário';
     $('dsNome').value = d?.nome || ''; $('dsEmail').value = d?.email || ''; $('dsSetor').value = d?.setor || '';
-    $('dsUsuario').value = d?.usuario || ''; $('dsAtivo').checked = d ? d.ativo !== false : true;
+    $('dsUsuario').value = d?.usuario || ''; $('dsAtivo').checked = d ? d.ativo !== false : true; $('dsCopia').checked = !!d?.copia;
     window.abrirModal?.($('mDsEditar'));
     setTimeout(() => (d?.nome && !d?.email ? $('dsEmail') : $('dsNome')).focus(), 60);
   }
   async function salvar() {
-    const d = { id: editando?.id || '', nome: $('dsNome').value.trim(), email: $('dsEmail').value.trim(), setor: $('dsSetor').value.trim(), usuario: $('dsUsuario').value.trim().replace(/^@/, ''), ativo: $('dsAtivo').checked };
+    const d = { id: editando?.id || '', nome: $('dsNome').value.trim(), email: $('dsEmail').value.trim(), setor: $('dsSetor').value.trim(), usuario: $('dsUsuario').value.trim().replace(/^@/, ''), ativo: $('dsAtivo').checked, copia: $('dsCopia').checked };
     if (!d.nome) { toast('Informe o nome do destinatário.', true); return $('dsNome').focus(); }
     if (!emailValido(d.email)) { toast('Confira o e-mail: ele parece incompleto.', true); return $('dsEmail').focus(); }
     const b = $('dsSalvar'); b.disabled = true;
@@ -291,7 +295,7 @@
   let conf = [], pos = 0;
   const marcadosPor = new Map(); // id do e-mail → Set de destinatários marcados
   const atual = () => conf[pos];
-  const marcados = () => { const e = atual(); if (!e) return new Set(); if (!marcadosPor.has(e.id)) marcadosPor.set(e.id, new Set(e.sugeridos.filter((id) => dests.some((d) => d.id === id)))); return marcadosPor.get(e.id); };
+  const marcados = () => { const e = atual(); if (!e) return new Set(); if (!marcadosPor.has(e.id)) marcadosPor.set(e.id, new Set([...e.sugeridos, ...(e.copias || [])].filter((id) => dests.some((d) => d.id === id)))); return marcadosPor.get(e.id); };
 
   // Prévia num Shadow DOM (como no editor do modelo): funciona com a política de segurança do app.
   const raizPrevia = $('ecFrame').attachShadow({ mode: 'open' });
@@ -329,15 +333,17 @@
     // Destinatário que saiu do cadastro (ou ficou inativo) deixa de contar.
     [...sel].forEach((id) => { if (!dests.some((d) => d.id === id)) sel.delete(id); });
     const busca = $('ecBusca').value.trim().toLowerCase();
-    const sug = new Set(e.sugeridos);
+    const sug = new Set(e.sugeridos), cop = new Set(e.copias || []);
+    $('ecJa').hidden = !e.jaEnviado;
+    $('ecJa').innerHTML = e.jaEnviado ? `${ico('check')}<span>Já enviado automaticamente para <b>${esc(e.jaEnviado)}</b>. Marque quem mais deve receber uma cópia.</span>` : '';
     const lista = dests
       .filter((d) => !busca || sel.has(d.id) || [d.nome, d.email, d.setor].join(' ').toLowerCase().includes(busca))
-      .sort((a, b) => (sug.has(b.id) - sug.has(a.id)) || a.nome.localeCompare(b.nome, 'pt-BR'));
+      .sort((a, b) => ((sug.has(b.id) || cop.has(b.id)) - (sug.has(a.id) || cop.has(a.id))) || a.nome.localeCompare(b.nome, 'pt-BR'));
     $('ecLista').innerHTML = dests.length ? (lista.length ? lista.map((d) => `
       <label class="ec-dest${sel.has(d.id) ? ' on' : ''}">
         <input type="checkbox" data-ec-dest="${esc(d.id)}" ${sel.has(d.id) ? 'checked' : ''} />
         <span class="ec-dest-txt"><b>${esc(d.nome)}</b><small>${esc(d.email)}${d.setor ? ' · ' + esc(d.setor) : ''}</small></span>
-        ${sug.has(d.id) ? '<span class="perm-chip all">Sugerido</span>' : ''}
+        ${sug.has(d.id) ? '<span class="perm-chip all">Sugerido</span>' : cop.has(d.id) ? '<span class="perm-chip all">Cópia</span>' : ''}
       </label>`).join('') : '<div class="us-empty">Ninguém encontrado com esse filtro.</div>')
       : `<div class="us-empty">Nenhum destinatário cadastrado ainda.${podeEditar ? '' : ' Peça para quem cuida dos cadastros incluir as pessoas na tela Destinatários.'}</div>`;
     $('ecFaltam').innerHTML = (e.semCadastro || []).map((s, i) => `
@@ -384,7 +390,7 @@
     if (!r?.ok) { renderLista(); return toast(erroDe(r, 'Não foi possível enviar o e-mail.'), true); }
     fila = fila.filter((x) => x.id !== e.id);
     recentes.unshift({ ...e, situacao: 'ENVIADO', enviadoPor: AUTH()?.usuario?.nome || 'você', enviadoEm: 'agora', destinatarios: (r.para || []).join(', '), assunto: r.assunto });
-    marcadosPor.delete(e.id);
+    marcadosPor.delete(e.id); atualizarBadge();
     toast(r.enviados === 1 ? `E-mail enviado para ${String(r.para[0]).replace(/\s*<.*$/, '')}.` : `E-mail enviado para ${r.enviados} pessoas.`);
     proximo();
   }
@@ -428,7 +434,7 @@
   });
   $('ecNovoDest').addEventListener('click', () => cadastrarEMarcar(null));
   $('ecEnviar').addEventListener('click', enviar);
-  $('ecDepois').addEventListener('click', proximo);
+  $('ecDepois').addEventListener('click', () => { toast('O e-mail ficou como pendência no sino de notificações. Dá para enviar ou excluir por lá.'); proximo(); });
   $('ecDescartar').addEventListener('click', async () => { const e = atual(); if (e && await descartar(e.id)) proximo(); });
   new MutationObserver(() => { if (!$('mEmConferir').classList.contains('open') && conf.length) { conf = []; pos = 0; atualizarBadge(); if (naTela()) renderFila(); } })
     .observe($('mEmConferir'), { attributes: true, attributeFilter: ['class'] });
@@ -476,5 +482,11 @@
   }
 
   window.DESTINATARIOS = { render, carregar: carregarFila };
-  window.EMAILS = { conferir };
+  window.EMAILS = {
+    conferir,
+    pendentes: () => (indisponivel ? [] : fila.slice()),
+    abrir: (id) => { const e = fila.find((x) => x.id === id); if (e) abrirConferencia([e]); },
+    descartar: (id) => descartar(id),
+    carregar: () => carregarFila({ abrirNovos: false }),
+  };
 })();

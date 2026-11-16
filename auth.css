@@ -426,6 +426,17 @@
 .ec-falta { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--warn-soft); color: var(--text-2); font-size: 12px; line-height: 1.4; }
 .ec-falta .ico, .ec-falta svg { width: 15px; height: 15px; color: var(--warn); }
 .ec-novo { align-self: flex-start; flex: none; }
+.ec-ja { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: start; flex: none; padding: 9px 11px; border-radius: 10px; background: var(--ok-soft); color: var(--text-2); font-size: 12px; line-height: 1.45; }
+.ec-ja[hidden] { display: none; }
+.ec-ja svg, .ec-ja .ico { width: 15px; height: 15px; color: var(--ok); margin-top: 1px; }
+.ds-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.notif-sec { padding: 6px 4px 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.notif-email { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 10px; margin: 0 0 6px; border-radius: 10px; background: var(--warn-soft); font-size: 12.5px; }
+.notif-email .notif-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.notif-email-acoes { display: flex; gap: 6px; margin-top: 6px; }
+.notif-email-acoes button { height: 26px; padding: 0 10px; border-radius: 7px; font-size: 11.5px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); }
+.notif-email-acoes button.ok { background: var(--accent); border-color: transparent; color: #fff; }
+.notif-email-acoes button.ex:hover { color: var(--danger); border-color: var(--danger); }
 .ec-preview { min-height: 0; }
 .ec-frame { flex: 1; width: 100%; min-height: 0; overflow: auto; background: #eef1f6; }
 .ec-pos { margin-right: auto; color: var(--muted); font-size: 12px; }

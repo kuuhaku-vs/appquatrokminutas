@@ -49,7 +49,7 @@
     <section class="card em-card" id="emCard" hidden>
       <div class="card-h"><h3 data-ico="mail">Aviso por e-mail <span class="perm-chip" id="emStatus">…</span></h3>
         <div class="card-actions"><button class="primary" id="emAbrir" type="button" data-ico="edit"><span>Editar modelo</span></button></div></div>
-      <p class="hint" id="emResumo">Quando um pedido de envio é incluído, recusado, reaberto ou comentado, o e-mail fica pendente para conferência e vai só para os destinatários marcados do cadastro. Aqui você muda o texto, a assinatura e o que aparece no e-mail.</p>
+      <p class="hint" id="emResumo">Quem fez o pedido recebe automático os avisos de pedido incluído, recusado, reaberto, comentado e parado. Outros destinatários (gestor etc.) só depois de conferido. Aqui você muda o texto, a assinatura e o que aparece no e-mail.</p>
     </section>`);
 
   document.body.insertAdjacentHTML('beforeend', `
@@ -65,7 +65,7 @@
 
         <div class="em-lembrete" data-tipo="lembrete">
           <span class="sub-title">Lembrete de pedido parado</span>
-          <div class="chips-check"><label><input type="checkbox" data-k="lembrete.ativo" /><span>Enviar lembrete para quem monta o malote</span></label></div>
+          <div class="chips-check"><label><input type="checkbox" data-k="lembrete.ativo" /><span>Enviar lembrete de pedido parado para quem pediu</span></label></div>
           <div class="fgrid">
             <label class="field"><span>Avisar depois de (horas)</span><input data-k="lembrete.horas" type="number" min="1" max="720" step="1" title="Quantas horas um pedido pode ficar aguardando antes do lembrete. O lembrete se repete a cada esse número de horas enquanto o pedido continuar parado." /></label>
           </div>
@@ -170,8 +170,8 @@
       incluido: 'Vai para quem fez o pedido quando ele entra numa minuta.',
       recusado: 'Vai para quem fez o pedido quando ele é recusado, com o motivo.',
       reaberto: 'Vai para quem fez o pedido quando um pedido recusado (ou cancelado) volta para a fila, para um envio posterior.',
-      comentario: 'Quando quem pediu comenta, vai para quem monta o malote. Quando quem monta comenta, vai para quem pediu.',
-      lembrete: 'Vai para quem monta o malote quando um pedido fica aguardando mais tempo que o configurado.',
+      comentario: 'Quando quem monta o malote comenta, vai automático para quem pediu. Quando quem pediu comenta, o e-mail fica para conferir antes de enviar.',
+      lembrete: 'Vai automático para quem pediu quando o pedido fica aguardando mais tempo que o configurado (e, conferido, para quem está "Sempre em cópia").',
     }[t];
     atualizarPrevia(0);
   }
@@ -203,7 +203,7 @@
     st.className = 'perm-chip ' + (r.modelo.ativo ? 'ok' : 'off');
     st.textContent = (r.modelo.ativo ? 'Ligado' : 'Desligado') + ' · ' + (personalizado ? 'modelo personalizado' : 'modelo padrão');
     $('emResumo').textContent = r.modelo.ativo
-      ? `Avisos de pedido incluído, recusado, reaberto e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Nada sai sozinho: cada e-mail é conferido e vai só para os destinatários marcados (tela Destinatários). Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
+      ? `Avisos de pedido incluído, recusado, reaberto e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Quem pediu recebe automático; os outros destinatários só depois de conferido (tela Destinatários). Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
       : 'Os avisos por e-mail estão desligados. Abra o modelo para ligar de novo.';
   }
   const AUTH = window.AUTH;

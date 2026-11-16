@@ -262,8 +262,8 @@
     box.hidden = false;
     box.classList.toggle('sem', !u.email);
     $('pedEmailTxt').textContent = u.email
-      ? 'Quando o pedido for incluído na minuta, recusado, reaberto ou comentado, a Expedição confere e envia o aviso para ' + u.email + ' (se você estiver no cadastro de destinatários).'
-      : 'Cadastre o seu e-mail para que a Expedição possa incluir você no cadastro de destinatários e mandar os avisos dos seus pedidos.';
+      ? 'Você recebe um e-mail em ' + u.email + ' quando o pedido for incluído na minuta, recusado, reaberto, comentado ou ficar parado.'
+      : 'Cadastre o seu e-mail para ser avisado quando o pedido for incluído na minuta, recusado, reaberto, comentado ou ficar parado.';
     $('pedEmailBtn').textContent = u.email ? 'Alterar' : 'Cadastrar e-mail';
   }
   $('pedEmailBtn')?.addEventListener('click', () => { $('sbUser')?.click(); setTimeout(() => $('contaEmail')?.focus(), 120); });
@@ -382,7 +382,7 @@
     b.disabled = false;
     if (!r?.ok) return window.toast?.(r?.error || 'Não foi possível recusar o pedido.', true);
     window.fecharModal?.($('mPedRecusar')); recusando = null;
-    window.toast?.('Pedido recusado. Quem pediu vai ver o motivo.'); carregar();
+    window.toast?.(r.emailsAutomaticos ? 'Pedido recusado. Quem pediu recebeu o aviso por e-mail com o motivo.' : 'Pedido recusado. Quem pediu vai ver o motivo.'); carregar();
     window.EMAILS?.conferir(r.emailsPendentes); // confira o e-mail e marque quem recebe antes de enviar
   });
 
@@ -393,7 +393,7 @@
     reabrindo = p;
     const eu = AUTH()?.usuario?.usuario;
     $('pedReaResumo').innerHTML = `<b>${esc(resumo(p))}</b><br><small>${p.qtd} × ${esc(p.conteudo)} · pedido por ${esc(p.nome)} · ${p.situacao === 'RECUSADO' ? 'recusado' + (p.motivo ? ': ' + esc(p.motivo) : '') : 'cancelado'}</small>`;
-    $('pedReaAviso').textContent = p.usuario === eu ? '' : `${p.nome} recebe um aviso no app. O e-mail você confere e envia em seguida.`;
+    $('pedReaAviso').textContent = p.usuario === eu ? '' : `${p.nome} recebe um aviso no app e por e-mail (se tiver e-mail cadastrado).`;
     $('pedReaNota').value = '';
     window.abrirModal?.($('mPedReabrir'));
     setTimeout(() => $('pedReaNota').focus(), 60);
@@ -411,7 +411,7 @@
     situacaoAnterior.set(r.pedido.id, 'AGUARDANDO'); conhecidos.add(r.pedido.id);
     window.fecharModal?.($('mPedReabrir')); reabrindo = null;
     render(); atualizarAvisos(); atualizarSino();
-    window.toast?.(`Pedido ${resumo(r.pedido)} voltou para a fila.`);
+    window.toast?.(`Pedido ${resumo(r.pedido)} voltou para a fila.${r.emailsAutomaticos ? ' Quem pediu recebeu o aviso por e-mail.' : ''}`);
     window.EMAILS?.conferir(r.emailsPendentes);
   });
 
@@ -426,26 +426,36 @@
     }));
     return lista.sort((a, b) => b.quando - a.quando).slice(0, 40);
   }
+  // E-mails pendentes (conferir antes de enviar) também aparecem no sino, como pendência.
+  const emailsPend = () => (entrou ? window.EMAILS?.pendentes?.() || [] : []);
   function posicionarSino() {
     const view = document.getElementById('v-' + (document.body.dataset.screen || ''));
     const acts = view?.querySelector('.vh-actions');
     if (acts && sino.parentNode !== acts) acts.prepend(sino);
-    sino.hidden = !usaPedidos() || !acts;
+    sino.hidden = (!usaPedidos() && !emailsPend().length) || !acts;
     if (sino.hidden) fecharPainel();
   }
   function atualizarSino() {
     posicionarSino();
-    const n = notificacoes().filter((x) => !x.lido).length;
+    const nc = notificacoes().filter((x) => !x.lido).length, ne = emailsPend().length, n = nc + ne;
     const badge = $('notifBadge');
     badge.hidden = !n; badge.textContent = n > 9 ? '9+' : String(n);
     sino.classList.toggle('tem', !!n);
-    sino.title = n ? `${n} ${n === 1 ? 'comentário novo' : 'comentários novos'}` : 'Notificações dos comentários';
+    sino.title = n ? [ne ? `${ne} ${ne === 1 ? 'e-mail pendente' : 'e-mails pendentes'}` : '', nc ? `${nc} ${nc === 1 ? 'comentário novo' : 'comentários novos'}` : ''].filter(Boolean).join(' · ') : 'Notificações';
     if (!$('notifPainel').hidden) renderPainel();
   }
   function renderPainel() {
-    const lista = notificacoes();
+    const lista = notificacoes(), pend = emailsPend();
     $('notifLerTodas').hidden = !lista.some((x) => !x.lido);
-    $('notifLista').innerHTML = lista.length ? lista.map((x) => {
+    const blocoEmails = pend.length ? `<div class="notif-sec">E-mails pendentes (${pend.length})</div>` + pend.map((e) => `
+      <div class="notif-email">
+        <span class="notif-ico">${ico('mail')}</span>
+        <span class="notif-txt"><span><b>${esc(e.nomeTipo)}</b>: ${esc(e.pedidos?.[0] ? e.pedidos[0].de + ' → ' + e.pedidos[0].para : e.resumo)}${e.pedidos?.length > 1 ? ` e mais ${e.pedidos.length - 1}` : ''}</span>
+          <small>${e.jaEnviado ? 'Quem pediu já recebeu. Falta conferir a cópia para os outros destinatários.' : 'Aguardando você conferir e enviar.'}</small><em>${esc(e.criadoEm)}</em>
+          <span class="notif-email-acoes"><button type="button" class="ok" data-notif-email-abrir="${esc(e.id)}">Conferir e enviar</button><button type="button" class="ex" data-notif-email-excluir="${esc(e.id)}">Excluir</button></span>
+        </span>
+      </div>`).join('') + (lista.length ? '<div class="notif-sec">Comentários</div>' : '') : '';
+    $('notifLista').innerHTML = blocoEmails + (lista.length ? lista.map((x) => {
       const reab = /^↺/.test(x.c.texto);
       const txt = x.c.texto.replace(/^↺\s*/, '');
       return `<button type="button" class="notif-item${x.lido ? '' : ' novo'}" data-notif-ped="${esc(x.p.id)}">
@@ -453,7 +463,7 @@
         <span class="notif-txt"><span><b>${esc(x.c.nome)}</b> ${reab ? 'reabriu' : 'comentou em'} <b>${esc(resumo(x.p))}</b></span>
         <small>${esc(txt.length > 110 ? txt.slice(0, 110) + '…' : txt)}</small><em>${esc(x.c.data)}</em></span>
         ${x.lido ? '' : '<i class="ped-dot" aria-hidden="true"></i>'}</button>`;
-    }).join('') : '<div class="notif-vazio">Nenhum comentário por aqui ainda. Quando alguém comentar num pedido seu (ou num pedido que você atende), aparece aqui.</div>';
+    }).join('') : (pend.length ? '' : '<div class="notif-vazio">Nenhuma notificação. Comentários nos pedidos e e-mails pendentes de conferência aparecem aqui.</div>'));
   }
   function abrirPainel() {
     const painel = $('notifPainel');
@@ -467,9 +477,14 @@
     sino.setAttribute('aria-expanded', 'true');
   }
   function fecharPainel() { const pn = $('notifPainel'); if (pn && !pn.hidden) { pn.hidden = true; sino.setAttribute('aria-expanded', 'false'); } }
-  sino.addEventListener('click', (e) => { e.stopPropagation(); if ($('notifPainel').hidden) { carregar(); abrirPainel(); } else fecharPainel(); });
+  sino.addEventListener('click', (e) => { e.stopPropagation(); if ($('notifPainel').hidden) { carregar(); window.EMAILS?.carregar?.(); abrirPainel(); } else fecharPainel(); });
+  window.addEventListener('gm-emails-atualizados', atualizarSino);
   $('notifPainel').addEventListener('click', (e) => {
     e.stopPropagation();
+    const ab = e.target.closest('[data-notif-email-abrir]');
+    if (ab) { fecharPainel(); return window.EMAILS?.abrir?.(ab.dataset.notifEmailAbrir); }
+    const ex = e.target.closest('[data-notif-email-excluir]');
+    if (ex) { fecharPainel(); return window.EMAILS?.descartar?.(ex.dataset.notifEmailExcluir); }
     const it = e.target.closest('[data-notif-ped]');
     if (it) { fecharPainel(); abrirComentarios(it.dataset.notifPed); }
   });
@@ -495,7 +510,7 @@
       : '<div class="us-empty">Nenhum comentário ainda. Escreva abaixo para conversar sobre este pedido.</div>';
     if (noFim || !box.dataset.aberto) { box.scrollTop = box.scrollHeight; box.dataset.aberto = '1'; }
     const meu = !eu || p.usuario === eu;
-    $('pedComNota').textContent = (meu ? 'Quem monta o malote recebe um aviso no app.' : `${p.nome} recebe um aviso no app.`) + ' Se quiser mandar e-mail, você confere a mensagem e escolhe quem recebe logo depois de enviar.';
+    $('pedComNota').textContent = meu ? 'Quem monta o malote recebe um aviso no app. E-mail para outras pessoas só depois de conferido.' : `${p.nome} recebe um aviso no app e por e-mail (se tiver e-mail cadastrado).`;
     marcarLido(p);
   }
   function abrirComentarios(id) {
