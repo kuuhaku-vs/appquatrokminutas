@@ -13,6 +13,17 @@ O mesmo código roda de dois jeitos:
 | PDF | Imprimir › **Salvar como PDF** | Gerado e aberto automaticamente, com cópia no Drive |
 | Cópia no `registro_itens.csv` | — | Sim, quando a pasta estiver acessível |
 
+## Novidades da v3.5
+
+- **Início**: painel que abre primeiro, com minutas do dia e do mês, volumes, pedidos aguardando, atalhos e últimas minutas. Cada perfil só vê o que pode usar. Atalho **Alt+0**.
+- **Frete cortesia** virou uma aba dentro da **Nova minuta** (Minuta de despacho | Frete cortesia).
+- **Configurações** fica na engrenagem ao lado do usuário (barra lateral e topo do celular).
+- **Para quem vai**: janela de escolha com busca e destinatários recentes.
+- Novo conteúdo **Desenvolvimento** nos pedidos e itens.
+- No celular, a barra de baixo tem 4 telas + **Mais**.
+- E-mail **Malote despachado**: ao registrar a minuta, um aviso único com o malote inteiro vai automático para quem pediu, para quem recebe cada item (cadastro de destinatários) e para quem está "Sempre em cópia". Substitui o aviso de "pedido incluído". **Precisa publicar o `GoogleSheets_Script.gs` 3.5 no Apps Script.**
+- Programa do Windows mostra o ícone do Gerador na janela e na barra de tarefas (`icon.ico`).
+
 ## No celular
 1. Abra `https://kuuhaku-vs.github.io/appquatrokminutas/` no Safari (iPhone) ou Chrome (Android).
 2. Entre com seu **usuário e senha** (veja *Usuários e login*). Marque **Manter conectado** se o aparelho for só seu.

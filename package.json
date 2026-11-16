@@ -1,6 +1,6 @@
 {
   "name": "gerador-minuta",
   "productName": "Gerador de Minuta",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "main": "main.cjs"
 }
