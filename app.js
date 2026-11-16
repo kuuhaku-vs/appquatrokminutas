@@ -972,10 +972,17 @@ function draftSnapshot() {
     horaEntrega: $('horaEntrega')?.value || ''
   };
 }
+// Rascunho só faz sentido para quem monta minutas (o perfil Consulta não vê o aviso).
+function podeMontarMinuta() {
+  const A = window.AUTH;
+  if (!A || A.legado || typeof A.pode !== 'function') return true;
+  return !!(A.pode('minutas.criar') || A.pode('minutas.editar'));
+}
 async function salvarRascunho() {
-  if (restoringDraft || modoRevisao || !draftDirty) return;
+  if (restoringDraft || modoRevisao || !draftDirty || !podeMontarMinuta()) return;
   const snap = draftSnapshot();
-  if (!snap.numero && !snap.itens.length) return;
+  // Sem nenhum item no malote não há o que recuperar: apaga o rascunho antigo, se houver.
+  if (!snap.itens.length) { try { localStorage.removeItem(DRAFT_KEY); await localDB.del('drafts', 'current'); } catch {} return; }
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(snap));
     await localDB.put('drafts', { key: 'current', ...snap });
@@ -998,6 +1005,8 @@ async function recuperarRascunho() {
   } catch {}
   if (!snap) snap = await localDB.get('drafts', 'current');
   if (!snap || !snap.savedAt) return;
+  if (!podeMontarMinuta()) return; // não mostra (nem apaga: pode ser de outro usuário no mesmo computador)
+  if (!snap.itens?.length) { await limparRascunho(); return; }
   const age = Date.now() - new Date(snap.savedAt).getTime();
   if (age > 1000 * 60 * 60 * 24 * 7) { await limparRascunho(); return; }
   const ok = await confirmarAcaoCorporativa({
