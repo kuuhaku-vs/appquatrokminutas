@@ -118,6 +118,10 @@
  */
 
 const CODIGO_ACESSO = 'TROQUE-ESTE-CODIGO';      // o mesmo código informado no Gerador
+// ID da planilha "Gerador de Minutas - 4K" (o trecho entre /d/ e /edit no endereço dela).
+// Vazio = usa a planilha onde este script está (script criado em Extensões › Apps Script).
+// Preenchido = script avulso (ex.: na conta da empresa, para os e-mails saírem dela).
+const ID_PLANILHA = '';
 const NOME_PASTA_PDF = 'Minutas Quatro K - PDFs'; // criada ao lado desta planilha
 const ABA_MINUTAS = 'Minutas';
 const ABA_ITENS = 'Itens';
@@ -132,7 +136,7 @@ const CAB_EMAILS = ['ID', 'Criado em', 'Tipo', 'Situação', 'Gerado por', 'Nome
 const CAB_COMENTARIOS = ['Pedido', 'Data', 'Usuário', 'Nome', 'Comentário'];
 const CAB_AUDITORIA = ['Data', 'Usuário', 'Nome', 'Ação', 'Alvo', 'Detalhes'];
 const MAX_AUDITORIA = 20000; // linhas guardadas na aba Auditoria (as mais antigas saem)
-const VERSAO_SCRIPT = '3.7';
+const VERSAO_SCRIPT = '3.8';
 
 // ---------- Avisos por e-mail ----------
 const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
@@ -175,7 +179,7 @@ function doPost(e) {
   const ctx = { quem: null };
   try {
     req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
-    ss = SpreadsheetApp.getActiveSpreadsheet();
+    ss = planilhaPrincipal();
     const res = processar(req, ss, ctx);
     if (res && res.ok) auditar(ss, ctx.quem, req, res);
     verificarPedidosParadosSePreciso(ss); // lembrete de pedido parado (no máximo a cada 30 min)
@@ -310,10 +314,35 @@ function processar(req, ss, ctx) {
 }
 
 function doGet() {
-  return resposta({ ok: true, versao: VERSAO_SCRIPT, servico: 'Gerador de Minutas · Quatro K', planilha: SpreadsheetApp.getActiveSpreadsheet().getName() });
+  return resposta({ ok: true, versao: VERSAO_SCRIPT, servico: 'Gerador de Minutas · Quatro K', planilha: planilhaPrincipal().getName() });
 }
 
 // ---------- Auxiliares ----------
+function planilhaPrincipal() {
+  return ID_PLANILHA ? SpreadsheetApp.openById(ID_PLANILHA) : SpreadsheetApp.getActiveSpreadsheet();
+}
+
+// ---------- Mudança de conta do script (uso único, pelo editor) ----------
+// 1) No script ANTIGO: rode exportarConfiguracao. Ele copia o modelo do e-mail para a aba "_migracao".
+// 2) No script NOVO: rode importarConfiguracao. Ele lê a aba, guarda o modelo e apaga a aba.
+function exportarConfiguracao() {
+  const ss = planilhaPrincipal();
+  const modelo = PropertiesService.getScriptProperties().getProperty(CHAVE_MODELO_EMAIL) || '';
+  const aba = ss.getSheetByName('_migracao') || ss.insertSheet('_migracao');
+  aba.clear();
+  aba.getRange(1, 1, 1, 2).setValues([[CHAVE_MODELO_EMAIL, modelo]]);
+  aba.hideSheet();
+  console.log(modelo ? 'Modelo do e-mail copiado para a aba _migracao.' : 'Este script usa o modelo padrão (nada a copiar). Aba _migracao criada vazia.');
+}
+function importarConfiguracao() {
+  const ss = planilhaPrincipal();
+  const aba = ss.getSheetByName('_migracao');
+  if (!aba) { console.log('Aba _migracao não encontrada. Rode exportarConfiguracao no script antigo primeiro.'); return; }
+  const v = aba.getRange(1, 1, 1, 2).getValues()[0];
+  if (v[0] === CHAVE_MODELO_EMAIL && v[1]) PropertiesService.getScriptProperties().setProperty(CHAVE_MODELO_EMAIL, String(v[1]));
+  ss.deleteSheet(aba);
+  console.log(v[1] ? 'Modelo do e-mail importado. Os e-mails saem de ' + contaQueEnvia() + '.' : 'Nada para importar (modelo padrão). Os e-mails saem de ' + contaQueEnvia() + '.');
+}
 function resposta(obj) {
   obj.versao = VERSAO_SCRIPT;
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
@@ -991,7 +1020,7 @@ function verificarPedidosParados(ss) {
 
 // Para rodar pelo editor (Executar) e ver o lembrete na hora, sem esperar os 30 minutos.
 function testarLembrete() {
-  const n = verificarPedidosParados(SpreadsheetApp.getActiveSpreadsheet());
+  const n = verificarPedidosParados(planilhaPrincipal());
   console.log(n ? 'Lembrete enviado para quem fez os pedidos (veja a aba Emails).' : 'Nenhum pedido parado há mais tempo que o configurado (ou lembrete desligado).');
 }
 
@@ -1181,7 +1210,7 @@ const TIPOS_EMAIL = ['despachado', 'incluido', 'recusado', 'reaberto', 'comentar
 
 // Pedido de exemplo para a prévia e o e-mail de teste.
 function exemploEmail(tipo, quem, modelo) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = planilhaPrincipal();
   const agora = agoraTexto(ss);
   const dono = { usuario: (quem && quem.usuario) || 'maria.silva', nome: (quem && quem.nome) || 'Maria Silva', email: (quem && quem.email) || 'maria.silva@exemplo.com.br' };
   const p = { criadoEm: agora, atendidoEm: agora, de: 'Mariana - Comercial', para: 'Sheila - Recepção SCS', qtd: 2, conteudo: 'Envelope', obs: 'Entregar em mãos', nome: 'Mariana Souza',
