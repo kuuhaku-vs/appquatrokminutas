@@ -40,7 +40,8 @@
           <div class="ped-email" id="pedEmailAviso" hidden><span data-ico="mail"></span><span id="pedEmailTxt"></span> <button class="lg-link ped-email-btn" id="pedEmailBtn" type="button"></button></div>
           <div class="fgrid">
             <label class="field span2"><span>Quem está enviando</span><input id="pedDe" list="pessoasList" maxlength="80" autocomplete="off" title="Nome e setor de quem está mandando o envio (ex.: Mariana - Expedição). Comece a digitar para ver os nomes já usados." /></label>
-            <label class="field span2"><span>Para quem vai</span><input id="pedPara" list="destinosList" maxlength="80" autocomplete="off" title="Nome e setor de quem vai receber (ex.: Sheila - Recepção). Comece a digitar para ver os nomes já usados." /></label>
+            <label class="field span2"><span>Para quem vai</span><input id="pedPara" list="pedParaList" maxlength="80" autocomplete="off" title="Só quem está no cadastro de destinatários. Comece a digitar e escolha um nome da lista." /><datalist id="pedParaList"></datalist></label>
+            <div class="ped-bloq span2" id="pedParaBloq" role="alert" hidden><span data-ico="shield"></span><div><b id="pedParaBloqTit">Destinatário não cadastrado</b><small id="pedParaBloqTxt"></small></div><button class="ghost sm" id="pedParaCadastrar" type="button" hidden>Cadastrar</button></div>
             <label class="field"><span>Quantidade</span><input id="pedQtd" type="number" min="1" max="999" value="1" title="Quantos volumes ou itens vão neste envio (de 1 a 999)" /></label>
             <label class="field"><span>Conteúdo</span><select id="pedConteudo" title="Tipo do que vai ser enviado: envelope, pacote, caixa ou outros">${CONTEUDOS.map((c) => `<option>${c}</option>`).join('')}</select></label>
             <label class="field span2"><span>Observação <i>(opcional)</i></span><textarea id="pedObs" rows="2" maxlength="200" title="Informação extra para quem monta o malote, como: entregar em mãos, frágil ou urgente. Opcional."></textarea></label>
@@ -271,6 +272,7 @@
 
   function render() {
     renderEmail();
+    carregarDestinos();
     const fila = aguardando(), dentro = naMinuta();
     const feitos = pedidos.filter((p) => p.situacao !== 'AGUARDANDO');
     $('pedListaTitulo').textContent = podeAtender ? 'Aguardando inclusão' : 'Meus pedidos aguardando';
@@ -325,16 +327,57 @@
     carregar();
   }
 
+  // ---------- "Para quem vai": só quem está no cadastro de destinatários ----------
+  let destinos = null; // null = cadastro ainda não carregado (ou script antigo: não bloqueia)
+  const normNome = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const rotuloDest = (d) => d.setor ? `${d.nome} - ${d.setor}` : d.nome;
+  const acharDestino = (txt) => { const n = normNome(txt); return n ? (destinos || []).find((d) => normNome(d.nome) === n || normNome(rotuloDest(d)) === n) : null; };
+  async function carregarDestinos() {
+    const r = await api.auth('destinatarios.listar');
+    if (!r?.ok) { destinos = /minuta inválido|desconhecida|Ação inválida/i.test(r?.error || '') ? null : destinos; return; }
+    destinos = (r.destinatarios || []).filter((d) => d.ativo);
+    $('pedParaList').innerHTML = destinos.map((d) => `<option value="${esc(d.nome)}">${esc(d.setor ? d.setor + ' · ' : '')}${esc(d.email)}</option>`).join('');
+    conferirPara();
+  }
+  // Mostra o bloqueio enquanto o nome digitado não for de alguém do cadastro.
+  function conferirPara({ forcar = false } = {}) {
+    const txt = $('pedPara').value.trim(), box = $('pedParaBloq');
+    const vazio = destinos && !destinos.length;
+    const bloqueado = destinos !== null && (vazio || (txt && !acharDestino(txt)));
+    const mostrar = bloqueado && (forcar || (txt && document.activeElement !== $('pedPara')) || vazio);
+    box.hidden = !mostrar;
+    $('pedPara').classList.toggle('invalido', !!(bloqueado && txt));
+    if (mostrar) {
+      $('pedParaBloqTit').textContent = vazio ? 'Nenhum destinatário cadastrado' : 'Destinatário não cadastrado';
+      $('pedParaBloqTxt').textContent = vazio
+        ? 'O pedido só pode ir para quem está no cadastro de destinatários. Peça para quem cuida dos cadastros incluir as pessoas.'
+        : `"${txt}" não está no cadastro de destinatários. Escolha um nome da lista${pode('cadastros.editar') ? ' ou cadastre a pessoa' : ' ou peça para quem cuida dos cadastros incluir'}.`;
+      $('pedParaCadastrar').hidden = vazio ? !pode('cadastros.editar') : !(pode('cadastros.editar') && txt);
+    }
+    $('pedEnviar').disabled = !!bloqueado && !!txt;
+    return !bloqueado;
+  }
+  $('pedPara').addEventListener('input', () => conferirPara());
+  $('pedPara').addEventListener('change', () => conferirPara());
+  $('pedPara').addEventListener('blur', () => setTimeout(() => conferirPara(), 150));
+  $('pedParaCadastrar').addEventListener('click', () => {
+    const nome = $('pedPara').value.trim();
+    window.DESTINATARIOS?.novo?.({ nome }, (d) => { carregarDestinos().then(() => { if (d?.ativo) { $('pedPara').value = d.nome; conferirPara(); } }); });
+  });
+  window.addEventListener('gm-destinatarios-atualizados', () => carregarDestinos());
+
   async function enviarPedido() {
     const pedido = { de: $('pedDe').value.trim(), para: $('pedPara').value.trim(), qtd: Number($('pedQtd').value) || 1, conteudo: $('pedConteudo').value, obs: $('pedObs').value.trim() };
     if (!pedido.de) { window.toast?.('Informe quem está enviando.', true); return $('pedDe').focus(); }
     if (!pedido.para) { window.toast?.('Informe para quem vai o envio.', true); return $('pedPara').focus(); }
+    if (!conferirPara({ forcar: true })) { window.toast?.(`Bloqueado: "${pedido.para}" não está no cadastro de destinatários.`, true); return $('pedPara').focus(); }
+    const dest = acharDestino(pedido.para); if (dest) pedido.para = dest.nome; // grava o nome igual ao do cadastro
     const b = $('pedEnviar'); b.disabled = true;
     const r = await api.auth('pedidos.criar', { pedido });
     b.disabled = false;
-    if (!r?.ok) return window.toast?.(r?.error || 'Não foi possível enviar o pedido.', true);
+    if (!r?.ok) { if (r?.codigo === 'destinatario') carregarDestinos(); return window.toast?.(r?.error || 'Não foi possível enviar o pedido.', true); }
     pedidos.unshift(r.pedido); situacaoAnterior.set(r.pedido.id, 'AGUARDANDO'); conhecidos.add(r.pedido.id);
-    $('pedPara').value = ''; $('pedQtd').value = 1; $('pedObs').value = ''; $('pedConteudo').value = 'Envelope';
+    $('pedPara').value = ''; $('pedQtd').value = 1; $('pedObs').value = ''; $('pedConteudo').value = 'Envelope'; conferirPara();
     render(); atualizarAvisos();
     window.toast?.(`Pedido enviado: ${resumo(r.pedido)}. Quem monta o malote já foi avisado.`);
     $('pedPara').focus();

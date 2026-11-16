@@ -168,6 +168,12 @@
 .conta-email .field { margin: 0; }
 .ped-email { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 4px 9px; margin: -4px 0 14px; padding: 9px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--text-2); font-size: 12px; line-height: 1.45; }
 .ped-email.sem { background: var(--warn-soft); }
+.ped-bloq { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: -4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--danger); background: var(--danger-soft); color: var(--text); font-size: 12.5px; line-height: 1.4; }
+.ped-bloq[hidden] { display: none; }
+.ped-bloq > span .ico, .ped-bloq > span svg { width: 17px; height: 17px; color: var(--danger); }
+.ped-bloq b { display: block; color: var(--danger); font-size: 12.5px; }
+.ped-bloq small { color: var(--text-2); font-size: 12px; }
+#pedPara.invalido { border-color: var(--danger) !important; box-shadow: 0 0 0 3px var(--danger-soft); }
 .ped-email > :first-child { display: grid; place-items: center; margin-top: 1px; }
 .ped-email svg, .ped-email .ico { width: 15px; height: 15px; }
 .ped-email-btn { grid-column: 2; justify-self: start; font-size: 12px !important; padding: 0 !important; margin: 0 !important; }

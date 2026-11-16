@@ -54,6 +54,7 @@ Quem tem a permissão **Pedir envios** (o perfil Consulta tem) abre **Envio** (A
 - Quem cria minutas é avisado: contador em **Envio** no menu, faixa amarela na **Nova minuta** e aviso na tela (e notificação do sistema, se ativar "Avisar com o app minimizado"). O app confere a cada minuto.
 - Em **Ver e incluir**, marque os pedidos e clique em **Incluir no malote**: eles viram itens da minuta aberta (marcados como *pedido*).
 - Ao **gerar o PDF** ou **registrar**, o pedido fica **incluído** com o número da minuta, e quem pediu é avisado. Excluir a minuta devolve o pedido para *aguardando*.
+- **Para quem vai** só aceita quem está no **cadastro de destinatários** (tela Destinatários): a lista aparece ao digitar e um nome fora do cadastro mostra o aviso *Destinatário não cadastrado* e bloqueia o envio (o script do Google também recusa). Quem tem *Alterar cadastros* pode cadastrar a pessoa ali mesmo (v3.4).
 - Quem pediu pode cancelar enquanto o pedido aguarda; quem monta o malote pode recusar, com um motivo que a pessoa vê.
 - Pedidos **recusados** ou **cancelados** podem ser excluídos por quem tem a permissão **Excluir pedidos** (o Administrador tem; para outros, marque no perfil Personalizado).
 - Os pedidos ficam na aba **Pedidos** da planilha.
@@ -82,7 +83,7 @@ Quando um pedido de envio é **incluído** numa minuta (ao gerar o PDF ou regist
 - Se quem pediu não tem e-mail, o aviso não sai automático: vira pendência, com o botão **Cadastrar** para incluir a pessoa no cadastro.
 - **Tela Destinatários** (menu, ao lado de Envio): **E-mails para conferir** (pendentes, enviados, automáticos e descartados recentes) e o **Cadastro de destinatários**: nome, e-mail, setor, usuário do Gerador (opcional), ativo e *Sempre em cópia*. **Importar usuários** traz quem já tem e-mail em Usuários.
 - Permissões: *Alterar cadastros* gerencia o cadastro. *Conferir e enviar e-mails* (Administrador e Operador têm) vê e envia as pendências de todos. Sem ela, a pessoa confere só as das próprias ações.
-- Abas **Destinatarios** e **Emails** na planilha. Precisa do script do Google **3.3**.
+- Abas **Destinatarios** e **Emails** na planilha. Precisa do script do Google **3.4**.
 
 ## Reabrir pedido e notificações (v3.0)
 - **Reabrir:** pedido **recusado** (ou cancelado) ganha o botão **Reabrir** em "Atendidos recentemente". Ele volta para a fila de aguardando, para entrar num malote posterior, com uma observação opcional. A reabertura fica registrada na conversa do pedido e quem pediu recebe o e-mail **Reaberto** (editável no modelo). Quem monta o malote reabre qualquer pedido; quem pediu reabre só os que ele mesmo cancelou.

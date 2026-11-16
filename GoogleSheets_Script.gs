@@ -100,6 +100,8 @@
  *     ligado ao usuário dele). Fica registrado na aba "Emails" como ENVIADO.
  *   • AO GERAR A MINUTA, a conferência abre sempre, já com quem vai receber
  *     o envio (o "Para" do pedido) marcado, se estiver no cadastro (3.3).
+ *   • PEDIDO DE ENVIO: o "Para quem vai" só aceita quem está no cadastro de
+ *     destinatários (ativo). Outro nome é recusado (3.4).
  *   • QUALQUER OUTRO DESTINATÁRIO (gestor, outro setor...) só recebe depois
  *     de conferido: o aviso entra na aba "Emails" como PENDENTE e o Gerador
  *     abre a janela "Conferir e-mail" (prévia + destinatários para marcar).
@@ -130,7 +132,7 @@ const CAB_EMAILS = ['ID', 'Criado em', 'Tipo', 'Situação', 'Gerado por', 'Nome
 const CAB_COMENTARIOS = ['Pedido', 'Data', 'Usuário', 'Nome', 'Comentário'];
 const CAB_AUDITORIA = ['Data', 'Usuário', 'Nome', 'Ação', 'Alvo', 'Detalhes'];
 const MAX_AUDITORIA = 20000; // linhas guardadas na aba Auditoria (as mais antigas saem)
-const VERSAO_SCRIPT = '3.3';
+const VERSAO_SCRIPT = '3.4';
 
 // ---------- Avisos por e-mail ----------
 const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
@@ -740,6 +742,11 @@ function criarPedido(ss, quem, req) {
   const de = textoLimpo(d.de, 80), para = textoLimpo(d.para, 80);
   if (!de) throw erroAcesso('pedido', 'Informe quem está enviando.');
   if (!para) throw erroAcesso('pedido', 'Informe para quem vai o envio.');
+  // "Para quem vai": só quem está no cadastro de destinatários (ativo).
+  const dest = lerDestinatarios(ss).lista.filter(function (d) {
+    return d.ativo && (normNome(d.nome) === normNome(para) || (d.setor && normNome(d.nome + ' - ' + d.setor) === normNome(para)));
+  })[0];
+  if (!dest) throw erroAcesso('destinatario', '"' + para + '" não está no cadastro de destinatários. Escolha alguém da lista ou peça para quem cuida dos cadastros incluir.');
   const qtd = Math.floor(Number(d.qtd));
   if (!(qtd >= 1 && qtd <= 999)) throw erroAcesso('pedido', 'A quantidade deve ser de 1 a 999.');
   const dados = lerPedidos(ss);
@@ -748,7 +755,7 @@ function criarPedido(ss, quem, req) {
   if (abertos >= MAX_PEDIDOS_ABERTOS) throw erroAcesso('limite', 'Você já tem ' + abertos + ' pedidos aguardando. Espere alguns serem incluídos antes de lançar outros.');
   const p = gravarPedido(dados.aba, {
     id: 'P' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1296).toString(36).toUpperCase(),
-    criadoEm: agoraTexto(ss), usuario: usuario, nome: quem.nome || usuario, de: de, para: para, qtd: qtd,
+    criadoEm: agoraTexto(ss), usuario: usuario, nome: quem.nome || usuario, de: de, para: dest.nome, qtd: qtd,
     conteudo: textoLimpo(d.conteudo, 30) || 'Envelope', obs: textoLimpo(d.obs, 200), situacao: SIT_AGUARDANDO
   });
   return { ok: true, pedido: pedidoPublico(p) };

@@ -269,6 +269,7 @@
     window.fecharModal?.($('mDsEditar'));
     toast(d.id ? 'Destinatário atualizado.' : `${r.destinatario.nome} entrou no cadastro de destinatários.`);
     if (naTela()) { renderCadastro(); renderFila(); }
+    window.dispatchEvent(new Event('gm-destinatarios-atualizados'));
     const cb = aoSalvar; aoSalvar = null;
     cb?.(r.destinatario);
   }
@@ -279,7 +280,7 @@
     const r = await api.auth('destinatarios.excluir', { id });
     if (!r?.ok) return toast(erroDe(r, 'Não foi possível excluir.'), true);
     todos = r.destinatarios || todos.filter((x) => x.id !== id); dests = todos.filter((x) => x.ativo);
-    renderCadastro(); toast('Destinatário excluído.');
+    renderCadastro(); toast('Destinatário excluído.'); window.dispatchEvent(new Event('gm-destinatarios-atualizados'));
   }
   async function importar() {
     const b = $('dsImportar'); b.disabled = true;
@@ -287,7 +288,7 @@
     b.disabled = false;
     if (!r?.ok) return toast(erroDe(r, 'Não foi possível importar.'), true);
     todos = r.destinatarios || todos; dests = todos.filter((x) => x.ativo);
-    renderCadastro(); carregarFila();
+    renderCadastro(); carregarFila(); window.dispatchEvent(new Event('gm-destinatarios-atualizados'));
     toast(r.importados ? `${r.importados} ${r.importados === 1 ? 'usuário entrou' : 'usuários entraram'} no cadastro de destinatários.` : 'Nenhum usuário novo com e-mail para importar.');
   }
 
@@ -481,7 +482,7 @@
     if (lista.length) abrirConferencia(lista);
   }
 
-  window.DESTINATARIOS = { render, carregar: carregarFila };
+  window.DESTINATARIOS = { render, carregar: carregarFila, novo: (base, depois) => abrirEditor(base ? { ativo: true, ...base } : null, depois) };
   window.EMAILS = {
     conferir,
     pendentes: () => (indisponivel ? [] : fila.slice()),
