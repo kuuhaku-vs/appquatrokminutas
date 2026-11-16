@@ -23,7 +23,7 @@
   };
 
   const VARS = [
-    ['primeiro_nome', 'Primeiro nome de quem pediu'], ['nome', 'Nome completo de quem pediu'], ['usuario', 'Usuário de quem pediu'],
+    ['primeiro_nome', 'Primeiro nome de quem recebe o e-mail'], ['nome', 'Nome completo de quem recebe'], ['email', 'E-mail de quem recebe'], ['usuario', 'Usuário de quem recebe (ou o começo do e-mail)'],
     ['minuta', 'Número da minuta'], ['o_seu_pedido', '"o seu pedido de envio" (ou "os seus pedidos…" quando são vários)'],
     ['atendente', 'Quem incluiu ou recusou'], ['data', 'Data e hora da inclusão ou recusa'],
     ['de', 'Quem está enviando'], ['para', 'Para quem vai'], ['motivo', 'Motivo da recusa'],
@@ -49,7 +49,7 @@
     <section class="card em-card" id="emCard" hidden>
       <div class="card-h"><h3 data-ico="mail">Aviso por e-mail <span class="perm-chip" id="emStatus">…</span></h3>
         <div class="card-actions"><button class="primary" id="emAbrir" type="button" data-ico="edit"><span>Editar modelo</span></button></div></div>
-      <p class="hint" id="emResumo">Quem faz um pedido de envio recebe um e-mail quando o pedido é incluído na minuta ou recusado. Você pode mudar o texto, a assinatura e o que aparece no e-mail.</p>
+      <p class="hint" id="emResumo">Quando um pedido de envio é incluído, recusado, reaberto ou comentado, o e-mail fica pendente para conferência e vai só para os destinatários marcados do cadastro. Aqui você muda o texto, a assinatura e o que aparece no e-mail.</p>
     </section>`);
 
   document.body.insertAdjacentHTML('beforeend', `
@@ -203,7 +203,7 @@
     st.className = 'perm-chip ' + (r.modelo.ativo ? 'ok' : 'off');
     st.textContent = (r.modelo.ativo ? 'Ligado' : 'Desligado') + ' · ' + (personalizado ? 'modelo personalizado' : 'modelo padrão');
     $('emResumo').textContent = r.modelo.ativo
-      ? `Avisos de pedido incluído, recusado, reaberto e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Só recebe quem tem e-mail no cadastro. Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
+      ? `Avisos de pedido incluído, recusado, reaberto e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Nada sai sozinho: cada e-mail é conferido e vai só para os destinatários marcados (tela Destinatários). Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
       : 'Os avisos por e-mail estão desligados. Abra o modelo para ligar de novo.';
   }
   const AUTH = window.AUTH;

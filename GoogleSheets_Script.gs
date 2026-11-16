@@ -92,6 +92,19 @@
  *   • AUDITORIA: aba "Auditoria" com quem fez o quê e quando (entradas no
  *     sistema, minutas, pedidos, comentários, usuários, modelo de e-mail).
  *     Consulte em Usuários › Histórico de ações. Guarda as últimas 20 mil linhas.
+ *
+ *  E-MAILS CONFERIDOS E DESTINATÁRIOS (versão 3.1):
+ *   • Nenhum e-mail sai mais sozinho. Cada aviso (pedido incluído, recusado,
+ *     reaberto, comentário, lembrete) entra na aba "Emails" como PENDENTE e
+ *     o Gerador abre a janela "Conferir e-mail": prévia da mensagem e a
+ *     lista de destinatários para marcar. Só sai quando alguém clica Enviar.
+ *   • Aba "Destinatarios": o cadastro de quem pode receber e-mail (nome,
+ *     e-mail, setor e, opcional, o usuário do Gerador). Só quem está nesse
+ *     cadastro pode ser marcado; não há caixa para digitar endereço.
+ *     Gerencie no Gerador, tela Destinatários (permissão "Alterar cadastros").
+ *   • Permissão nova "Conferir e enviar e-mails" (emails.enviar): vê e envia
+ *     os e-mails pendentes de todos, inclusive o lembrete. Sem ela, a pessoa
+ *     confere só os e-mails gerados pelas próprias ações.
  * ============================================================
  */
 
@@ -103,10 +116,14 @@ const ABA_USUARIOS = 'Usuarios';
 const ABA_PEDIDOS = 'Pedidos';
 const ABA_COMENTARIOS = 'Comentarios';
 const ABA_AUDITORIA = 'Auditoria';
+const ABA_DESTINATARIOS = 'Destinatarios';
+const ABA_EMAILS = 'Emails';
+const CAB_DESTINATARIOS = ['ID', 'Nome', 'E-mail', 'Setor', 'Usuário', 'Ativo', 'Criado em', 'Atualizado em'];
+const CAB_EMAILS = ['ID', 'Criado em', 'Tipo', 'Situação', 'Gerado por', 'Nome', 'Resumo', 'Dados', 'Enviado por', 'Enviado em', 'Destinatários', 'Assunto'];
 const CAB_COMENTARIOS = ['Pedido', 'Data', 'Usuário', 'Nome', 'Comentário'];
 const CAB_AUDITORIA = ['Data', 'Usuário', 'Nome', 'Ação', 'Alvo', 'Detalhes'];
 const MAX_AUDITORIA = 20000; // linhas guardadas na aba Auditoria (as mais antigas saem)
-const VERSAO_SCRIPT = '3.0';
+const VERSAO_SCRIPT = '3.1';
 
 // ---------- Avisos por e-mail ----------
 const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
@@ -126,10 +143,10 @@ const MAX_PEDIDOS_ABERTOS = 30; // pedidos aguardando por pessoa
 const CAB_USUARIOS = ['Usuário', 'Nome', 'Perfil', 'Permissões', 'Ativo', 'Senha (protegida)', 'Sessão', 'Criado em', 'Último acesso', 'E-mail'];
 
 // O que cada usuário pode acessar e alterar. O perfil "admin" tem tudo.
-const PERMISSOES = ['minutas.criar', 'minutas.editar', 'minutas.excluir', 'historico.ver', 'pedidos.criar', 'pedidos.excluir', 'frete.usar', 'cadastros.editar', 'config.acessar', 'usuarios.gerenciar'];
+const PERMISSOES = ['minutas.criar', 'minutas.editar', 'minutas.excluir', 'historico.ver', 'pedidos.criar', 'pedidos.excluir', 'frete.usar', 'cadastros.editar', 'emails.enviar', 'config.acessar', 'usuarios.gerenciar'];
 const PERFIS = {
   admin: PERMISSOES,
-  operador: ['minutas.criar', 'minutas.editar', 'historico.ver', 'frete.usar', 'cadastros.editar'],
+  operador: ['minutas.criar', 'minutas.editar', 'historico.ver', 'frete.usar', 'cadastros.editar', 'emails.enviar'],
   consulta: ['historico.ver', 'pedidos.criar'],
   personalizado: null
 };
@@ -196,6 +213,15 @@ function processar(req, ss, ctx) {
     if (req.acao === 'usuarios.emailprevia') { exigir(quem, 'usuarios.gerenciar'); return (previaEmail(req, quem)); }
     if (req.acao === 'usuarios.emailteste') { exigir(quem, 'usuarios.gerenciar'); return (testeEmail(req, quem)); }
     if (req.acao === 'usuarios.excluir') { exigir(quem, 'usuarios.gerenciar'); return (excluirUsuario(abaU, usuarios, quem, req)); }
+    // Cadastro de destinatários e e-mails conferidos antes do envio (versão 3.1).
+    if (req.acao === 'destinatarios.listar') return ({ ok: true, destinatarios: lerDestinatarios(ss).lista.map(destinatarioPublico), podeEditar: quem.permissoes.indexOf('cadastros.editar') >= 0 });
+    if (req.acao === 'destinatarios.salvar') { exigir(quem, 'cadastros.editar'); return (salvarDestinatario(ss, req)); }
+    if (req.acao === 'destinatarios.excluir') { exigir(quem, 'cadastros.editar'); return (excluirDestinatario(ss, req)); }
+    if (req.acao === 'destinatarios.importar') { exigir(quem, 'cadastros.editar'); return (importarDestinatarios(ss, usuarios)); }
+    if (req.acao === 'emails.listar') return (listarEmails(ss, usuarios, quem));
+    if (req.acao === 'emails.previa') return (previaEmailFila(ss, usuarios, quem, req));
+    if (req.acao === 'emails.enviar') return (enviarEmailFila(ss, quem, req));
+    if (req.acao === 'emails.descartar') return (descartarEmailFila(ss, quem, req));
 
     const abaM = obterAba(ss, ABA_MINUTAS, CAB_MINUTAS);
     const abaI = obterAba(ss, ABA_ITENS, CAB_ITENS);
@@ -260,8 +286,8 @@ function processar(req, ss, ctx) {
       }
       ordenar(abaM, CAB_MINUTAS.length);
       ordenar(abaI, CAB_ITENS.length);
-      const pedidos = marcarPedidosIncluidos(ss, itens, numeroTexto, quem);
-      return ({ ok: true, pdf: linkPdf, url: ss.getUrl(), pedidosIncluidos: pedidos, alterada: alterada, qtdItens: itens.length });
+      const inc = marcarPedidosIncluidos(ss, itens, numeroTexto, quem);
+      return ({ ok: true, pdf: linkPdf, url: ss.getUrl(), pedidosIncluidos: inc.qtd, emailsPendentes: inc.emails, alterada: alterada, qtdItens: itens.length });
     }
 
     return { ok: false, error: 'Ação desconhecida: ' + req.acao };
@@ -749,17 +775,17 @@ function cancelarPedido(ss, quem, req) {
   p.atendidoEm = agoraTexto(ss);
   p.motivo = meu ? '' : textoLimpo(req.motivo, 200);
   gravarPedido(dados.aba, p);
-  const emails = p.situacao === SIT_RECUSADO ? avisarPedidosPorEmail(ss, [p], 'recusado', quem) : 0;
-  return { ok: true, pedido: pedidoPublico(p), emailsEnviados: emails };
+  const emails = p.situacao === SIT_RECUSADO ? avisarPedidosPorEmail(ss, [p], 'recusado', quem) : [];
+  return { ok: true, pedido: pedidoPublico(p), emailsPendentes: emails };
 }
 
 // Chamado ao registrar uma minuta: itens que vieram de um pedido marcam o pedido como incluído.
 function marcarPedidosIncluidos(ss, itens, numeroTexto, quem) {
   const ids = itens.map(function (i) { return String(i.pedidoId || ''); }).filter(String);
-  if (!ids.length) return 0;
+  if (!ids.length) return { qtd: 0, emails: [] };
   const dados = lerPedidos(ss);
   let n = 0;
-  const novos = []; // só avisa por e-mail na primeira inclusão (regravar a mesma minuta não manda de novo)
+  const novos = []; // só gera o aviso por e-mail na primeira inclusão (regravar a mesma minuta não gera de novo)
   dados.lista.forEach(function (p) {
     if (ids.indexOf(p.id) < 0) return;
     if (p.situacao !== SIT_AGUARDANDO && !(p.situacao === SIT_INCLUIDO && normalizarNumero(p.minuta) === normalizarNumero(numeroTexto))) return;
@@ -767,8 +793,8 @@ function marcarPedidosIncluidos(ss, itens, numeroTexto, quem) {
     p.situacao = SIT_INCLUIDO; p.minuta = numeroTexto; p.atendidoPor = quem.nome || quem.usuario || ''; p.atendidoEm = agoraTexto(ss); p.motivo = '';
     gravarPedido(dados.aba, p); n++;
   });
-  if (novos.length) avisarPedidosPorEmail(ss, novos, 'incluido', quem);
-  return n;
+  const emails = novos.length ? avisarPedidosPorEmail(ss, novos, 'incluido', quem) : [];
+  return { qtd: n, emails: emails };
 }
 
 // Chamado ao excluir uma minuta: os pedidos dela voltam a aguardar.
@@ -822,9 +848,10 @@ function excluirComentarios(ss, ids) {
   for (let i = col.length - 1; i >= 0; i--) if (ids.indexOf(String(col[i][0])) >= 0) aba.deleteRow(i + 2);
 }
 
+// Quem monta o malote (sugeridos no e-mail; o e-mail de verdade vem do cadastro de destinatários).
 function atendentesComEmail(usuarios) {
   return usuarios.filter(function (u) {
-    return u.ativo && !u.pendente && u.email && (u.permissoes.indexOf('minutas.criar') >= 0 || u.permissoes.indexOf('minutas.editar') >= 0);
+    return u.ativo && !u.pendente && (u.permissoes.indexOf('minutas.criar') >= 0 || u.permissoes.indexOf('minutas.editar') >= 0);
   });
 }
 
@@ -854,13 +881,14 @@ function comentarPedido(ss, usuarios, quem, req) {
     atendentesComEmail(usuarios).forEach(function (u) { if (conversaram.indexOf(u.usuario) >= 0) destinos.push(u); });
   }
   const vistos = {};
-  destinos = destinos.filter(function (u) { if (!u || !u.email || u.ativo === false || u.usuario === eu || vistos[u.usuario]) return false; vistos[u.usuario] = 1; return true; });
-  let emails = 0;
+  destinos = destinos.filter(function (u) { if (!u || u.ativo === false || u.usuario === eu || vistos[u.usuario]) return false; vistos[u.usuario] = 1; return true; });
+  // O e-mail não sai sozinho: fica pendente para quem comentou conferir a mensagem e marcar os destinatários.
+  const emails = [];
   try {
-    const modelo = lerModeloEmail().modelo;
-    destinos.forEach(function (u) { if (enviarAviso(modelo, u, 'comentario', [p], quem, { autor: c.nome, comentario: texto })) emails++; });
-  } catch (err) { console.error('Aviso de comentário não enviado: ' + ((err && err.message) || err)); }
-  return { ok: true, comentario: c, comentarios: lista, pedido: pedidoPublico(p, lista), emailsEnviados: emails };
+    const id = enfileirarEmail(ss, 'comentario', [p], quem, { autor: c.nome, comentario: texto }, destinos);
+    if (id) emails.push(id);
+  } catch (err) { console.error('Aviso de comentário não gerado: ' + ((err && err.message) || err)); }
+  return { ok: true, comentario: c, comentarios: lista, pedido: pedidoPublico(p, lista), emailsPendentes: emails };
 }
 
 // ============================================================
@@ -891,14 +919,15 @@ function reabrirPedido(ss, usuarios, quem, req) {
   const texto = '↺ Reabriu o pedido para um envio posterior' + (anterior === SIT_RECUSADO ? ' (estava recusado' + (motivoAnterior ? ': ' + motivoAnterior : '') + ')' : ' (estava cancelado)') + '.' + (nota ? '\n' + nota : '');
   aba.getRange(aba.getLastRow() + 1, 1, 1, CAB_COMENTARIOS.length).setNumberFormat('@').setValues([[p.id, agora, eu, quem.nome || eu, texto]]);
   const lista = lerComentarios(ss)[p.id] || [];
-  let emails = 0;
+  const emails = [];
   if (!meu) {
     try {
       const dono = usuarios.filter(function (u) { return u.usuario === p.usuario; })[0];
-      if (dono && enviarAviso(lerModeloEmail().modelo, dono, 'reaberto', [p], quem, { nota: nota })) emails = 1;
-    } catch (err) { console.error('Aviso de pedido reaberto não enviado: ' + ((err && err.message) || err)); }
+      const id = enfileirarEmail(ss, 'reaberto', [p], quem, { nota: nota }, dono ? [dono] : [{ usuario: p.usuario, nome: p.nome }]);
+      if (id) emails.push(id);
+    } catch (err) { console.error('Aviso de pedido reaberto não gerado: ' + ((err && err.message) || err)); }
   }
-  return { ok: true, pedido: pedidoPublico(p, lista), anterior: anterior, nota: nota, emailsEnviados: emails };
+  return { ok: true, pedido: pedidoPublico(p, lista), anterior: anterior, nota: nota, emailsPendentes: emails };
 }
 
 // ============================================================
@@ -937,19 +966,19 @@ function verificarPedidosParados(ss) {
   if (!parados.length) return 0;
   const usuarios = lerUsuarios(obterAba(ss, ABA_USUARIOS, CAB_USUARIOS));
   const destinos = atendentesComEmail(usuarios);
-  let enviados = 0;
-  destinos.forEach(function (u) { if (enviarAviso(modelo, u, 'lembrete', parados, null, { horas: String(horas), total: String(parados.length) })) enviados++; });
+  // Não envia: deixa (ou atualiza) um e-mail pendente para quem tem "Conferir e enviar e-mails".
+  const id = enfileirarEmail(ss, 'lembrete', parados.slice(0, 60), null, { horas: String(horas), total: String(parados.length) }, destinos);
   const marca = agoraTexto(ss);
   parados.forEach(function (p) { p.lembreteEm = marca; gravarPedido(dados.aba, p); });
   registrarAcao(ss, { usuario: 'sistema', nome: 'Sistema' }, 'Lembrete de pedido parado', parados.length + (parados.length === 1 ? ' pedido' : ' pedidos'),
-    enviados ? 'E-mail para ' + destinos.map(function (u) { return '@' + u.usuario; }).join(', ') : 'Ninguém que monta o malote tem e-mail cadastrado');
-  return enviados;
+    id ? 'E-mail aguardando conferência na tela Destinatários' : 'Avisos por e-mail desligados');
+  return id ? 1 : 0;
 }
 
 // Para rodar pelo editor (Executar) e ver o lembrete na hora, sem esperar os 30 minutos.
 function testarLembrete() {
   const n = verificarPedidosParados(SpreadsheetApp.getActiveSpreadsheet());
-  console.log(n ? 'Lembrete enviado para ' + n + ' pessoa(s).' : 'Nenhum pedido parado há mais tempo que o configurado (ou lembrete desligado).');
+  console.log(n ? 'Lembrete criado: confira e envie no Gerador, tela Destinatários › E-mails para conferir.' : 'Nenhum pedido parado há mais tempo que o configurado (ou lembrete desligado).');
 }
 
 // ============================================================
@@ -990,6 +1019,11 @@ function auditar(ss, quem, req, res) {
   else if (a === 'usuarios.excluir') linha = ['Excluiu usuário', '@' + res.excluido, ''];
   else if (a === 'usuarios.emailsalvar') linha = [req.restaurar ? 'Restaurou o modelo de e-mail padrão' : 'Alterou o modelo de e-mail', '', res.modelo ? (res.modelo.ativo ? 'Avisos ligados' : 'Avisos desligados') + ' · lembrete ' + (res.modelo.lembrete.ativo ? 'a cada ' + res.modelo.lembrete.horas + ' h' : 'desligado') : ''];
   else if (a === 'usuarios.emailteste') linha = ['Enviou e-mail de teste', res.para || '', ''];
+  else if (a === 'destinatarios.salvar') linha = [req.novo ? 'Cadastrou destinatário de e-mail' : 'Alterou destinatário de e-mail', res.destinatario ? res.destinatario.nome : '', res.destinatario ? res.destinatario.email + (res.destinatario.ativo ? '' : ' · inativo') : ''];
+  else if (a === 'destinatarios.excluir') linha = ['Excluiu destinatário de e-mail', res.excluido || '', ''];
+  else if (a === 'destinatarios.importar') linha = ['Importou destinatários de e-mail', res.importados + (res.importados === 1 ? ' destinatário' : ' destinatários'), 'Usuários com e-mail'];
+  else if (a === 'emails.enviar') linha = ['Enviou e-mail conferido', res.assunto || '', 'Para ' + (res.para || []).join(', ')];
+  else if (a === 'emails.descartar') linha = ['Descartou e-mail sem enviar', res.assunto || res.resumo || '', ''];
   else if (a === 'registrar') linha = [res.alterada ? 'Alterou minuta' : 'Registrou minuta', 'Minuta nº ' + m.numero,
     [res.qtdItens + (res.qtdItens === 1 ? ' item' : ' itens'), m.destinatario ? 'para ' + m.destinatario : '', res.pedidosIncluidos ? res.pedidosIncluidos + ' pedido(s) incluído(s)' : '', req.pdf && req.pdf.base64 ? 'com PDF' : ''].filter(String).join(' · ')];
   else if (a === 'excluir') linha = ['Excluiu minuta', 'Minuta nº ' + (res.numero || m.numero), res.removidas ? '' : 'Não estava na planilha'];
@@ -1009,7 +1043,7 @@ function lerAuditoria(ss, req) {
     minutas: /minuta/i,
     pedidos: /pedido|comentou|lembrete/i,
     usuarios: /usuário/i,
-    email: /modelo de e-mail|e-mail de teste/i
+    email: /modelo de e-mail|e-mail de teste|e-mail conferido|e-mail sem enviar|destinatário/i
   };
   const limite = Math.max(20, Math.min(1000, Number(req.limite) || 300));
   const out = [];
@@ -1029,7 +1063,7 @@ function lerAuditoria(ss, req) {
 const CHAVE_MODELO_EMAIL = 'EMAIL_MODELO_V1';
 
 // Modelo padrão. Campos de texto aceitam:
-//   {primeiro_nome} {nome} {usuario} {minuta} {o_seu_pedido} {atendente} {data} {de} {para} {motivo}
+//   {primeiro_nome} {nome} {usuario} {email} {minuta} {o_seu_pedido} {atendente} {data} {de} {para} {motivo}
 //   {autor} {comentario} (comentário) · {horas} {total} (lembrete) · {nota} (reaberto)
 //   **texto** = negrito · linha em branco = novo parágrafo · campo vazio = não aparece no e-mail.
 function modeloEmailPadrao() {
@@ -1081,7 +1115,7 @@ function modeloEmailPadrao() {
     botao: { mostrar: true, texto: 'Abrir o Gerador de Minutas' },
     despedida: 'Atenciosamente,',
     assinatura: [EMAIL_ASSINATURA.nome, EMAIL_ASSINATURA.cargo, EMAIL_ASSINATURA.empresa, EMAIL_ASSINATURA.contato].filter(String).join('\n'),
-    rodape: 'Mensagem automática enviada pelo Gerador de Minutas · ' + EMAIL_ASSINATURA.empresa + ' para o usuário **@{usuario}**.'
+    rodape: 'Mensagem enviada pelo Gerador de Minutas · ' + EMAIL_ASSINATURA.empresa + ' para **{nome}** ({email}).'
   };
 }
 
@@ -1126,7 +1160,7 @@ const TIPOS_EMAIL = ['incluido', 'recusado', 'reaberto', 'comentario', 'lembrete
 function exemploEmail(tipo, quem, modelo) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const agora = agoraTexto(ss);
-  const dono = { usuario: (quem && quem.usuario) || 'maria.silva', nome: (quem && quem.nome) || 'Maria Silva', email: (quem && quem.email) || '' };
+  const dono = { usuario: (quem && quem.usuario) || 'maria.silva', nome: (quem && quem.nome) || 'Maria Silva', email: (quem && quem.email) || 'maria.silva@exemplo.com.br' };
   const p = { criadoEm: agora, atendidoEm: agora, de: 'Mariana - Comercial', para: 'Sheila - Recepção SCS', qtd: 2, conteudo: 'Envelope', obs: 'Entregar em mãos', nome: 'Mariana Souza',
     minuta: tipo === 'incluido' ? '000123' : '', motivo: tipo === 'recusado' ? 'Vai pelo correio nesta semana.' : '' };
   const pedidos = [p];
@@ -1159,37 +1193,25 @@ function testeEmail(req, quem) {
   return { ok: true, para: para, enviados: tipos.length, cota: MailApp.getRemainingDailyQuota() };
 }
 
-// Envia um aviso para uma pessoa. Devolve true se mandou.
-function enviarAviso(modelo, destino, tipo, pedidos, quem, extra) {
-  if (!modelo.ativo || !destino || !destino.email || destino.ativo === false) return false;
-  if (MailApp.getRemainingDailyQuota() < 1) { console.warn('Cota diária de e-mails esgotada.'); return false; }
-  const msg = montarEmailPedido(tipo, destino, pedidos, quem, modelo, extra);
-  const opcoes = { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html };
-  const responder = modelo.responderPara || (quem && quem.email) || '';
-  if (responder) opcoes.replyTo = responder;
-  MailApp.sendEmail(destino.email, msg.assunto, msg.texto, opcoes);
-  return true;
-}
-
-// Um e-mail por pessoa: se vários pedidos dela entram na mesma minuta, vão juntos.
-// Nunca derruba a gravação: qualquer falha no envio fica só no registro de execução.
+// Um e-mail por pessoa que pediu: se vários pedidos dela entram na mesma minuta, vão juntos.
+// Não envia: cada e-mail fica PENDENTE na aba Emails até alguém conferir e clicar Enviar.
+// Nunca derruba a gravação: qualquer falha fica só no registro de execução.
 function avisarPedidosPorEmail(ss, pedidos, tipo, quem) {
-  if (!pedidos || !pedidos.length) return 0;
-  let enviados = 0;
+  const ids = [];
+  if (!pedidos || !pedidos.length) return ids;
   try {
-    const modelo = lerModeloEmail().modelo;
-    if (!modelo.ativo) return 0;
     const usuarios = lerUsuarios(obterAba(ss, ABA_USUARIOS, CAB_USUARIOS));
     const porUsuario = {};
     pedidos.forEach(function (p) { (porUsuario[p.usuario] = porUsuario[p.usuario] || []).push(p); });
     Object.keys(porUsuario).forEach(function (login) {
-      const dono = usuarios.filter(function (u) { return u.usuario === login; })[0];
-      if (enviarAviso(modelo, dono, tipo, porUsuario[login], quem)) enviados++;
+      const dono = usuarios.filter(function (u) { return u.usuario === login; })[0] || { usuario: login, nome: porUsuario[login][0].nome };
+      const id = enfileirarEmail(ss, tipo, porUsuario[login], quem, {}, [dono]);
+      if (id) ids.push(id);
     });
   } catch (err) {
-    console.error('Aviso por e-mail não enviado: ' + ((err && err.message) || err));
+    console.error('Aviso por e-mail não gerado: ' + ((err && err.message) || err));
   }
-  return enviados;
+  return ids;
 }
 
 function escHtml(v) {
@@ -1224,7 +1246,7 @@ function montarEmailPedido(tipo, dono, pedidos, quem, modelo, extra) {
   const p0 = pedidos[0];
   const varios = pedidos.length > 1;
   const vars = {
-    primeiro_nome: primeiroNome(dono.nome), nome: dono.nome || dono.usuario, usuario: dono.usuario,
+    primeiro_nome: primeiroNome(dono.nome), nome: dono.nome || dono.usuario || '', usuario: dono.usuario || String(dono.email || '').split('@')[0], email: dono.email || '',
     minuta: p0.minuta || '', o_seu_pedido: varios ? 'os seus pedidos de envio' : 'o seu pedido de envio',
     atendente: (quem && (quem.nome || quem.usuario)) || p0.atendidoPor || '', data: p0.atendidoEm || '',
     de: p0.de || '', para: p0.para || '', motivo: p0.motivo || 'Não informado',
@@ -1330,4 +1352,263 @@ function montarEmailPedido(tipo, dono, pedidos, quem, modelo, extra) {
 function testarEmail() {
   const r = testeEmail({}, { usuario: 'teste', nome: 'Teste do Gerador', email: Session.getEffectiveUser().getEmail() });
   console.log(r.enviados + ' e-mails de teste enviados para ' + r.para + '. Cota restante hoje: ' + r.cota);
+}
+
+// ============================================================
+//  CADASTRO DE DESTINATÁRIOS (versão 3.1)
+// ============================================================
+// Só quem está neste cadastro pode receber e-mail do Gerador.
+function lerDestinatarios(ss) {
+  const aba = obterAba(ss, ABA_DESTINATARIOS, CAB_DESTINATARIOS);
+  const ultima = aba.getLastRow();
+  if (ultima < 2) return { aba: aba, lista: [] };
+  const lista = aba.getRange(2, 1, ultima - 1, CAB_DESTINATARIOS.length).getValues().map(function (r, i) {
+    if (!r[0] && !r[2]) return null;
+    const ativo = String(r[5]).trim().toUpperCase();
+    return {
+      linha: i + 2, id: String(r[0] || ('D' + (i + 2))), nome: String(r[1] || '').trim(), email: String(r[2] || '').trim().toLowerCase(),
+      setor: String(r[3] || '').trim(), usuario: normalizarUsuario(r[4]), ativo: ativo !== 'NÃO' && ativo !== 'NAO',
+      criadoEm: textoCelula(r[6], ss, 'dd/MM/yyyy HH:mm:ss'), atualizadoEm: textoCelula(r[7], ss, 'dd/MM/yyyy HH:mm:ss')
+    };
+  }).filter(function (x) { return x; });
+  lista.sort(function (a, b) { return a.nome.localeCompare(b.nome, 'pt-BR'); });
+  return { aba: aba, lista: lista };
+}
+
+function gravarDestinatario(aba, d) {
+  const linha = d.linha || (aba.getLastRow() + 1);
+  aba.getRange(linha, 1, 1, CAB_DESTINATARIOS.length).setNumberFormat('@').setValues([[
+    d.id, d.nome, d.email, d.setor || '', d.usuario || '', d.ativo ? 'SIM' : 'NÃO', d.criadoEm || '', d.atualizadoEm || ''
+  ]]);
+  d.linha = linha;
+  return d;
+}
+
+function destinatarioPublico(d) {
+  return { id: d.id, nome: d.nome, email: d.email, setor: d.setor, usuario: d.usuario, ativo: d.ativo, criadoEm: d.criadoEm, atualizadoEm: d.atualizadoEm };
+}
+
+function novoIdDestinatario() { return 'D' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1296).toString(36).toUpperCase(); }
+
+function salvarDestinatario(ss, req) {
+  const d = req.destinatario || {};
+  const nome = textoLimpo(d.nome, 80);
+  if (!nome) throw erroAcesso('destinatario', 'Informe o nome do destinatário.');
+  const email = validarEmail(d.email);
+  if (!email) throw erroAcesso('destinatario', 'Informe o e-mail do destinatário.');
+  const dados = lerDestinatarios(ss);
+  const id = String(d.id || '');
+  const repetido = dados.lista.filter(function (x) { return x.email === email && x.id !== id; })[0];
+  if (repetido) throw erroAcesso('destinatario', 'O e-mail ' + email + ' já está cadastrado para ' + repetido.nome + '.');
+  const agora = agoraTexto(ss);
+  let alvo = id ? dados.lista.filter(function (x) { return x.id === id; })[0] : null;
+  if (id && !alvo) throw erroAcesso('destinatario', 'Destinatário não encontrado. Atualize a lista.');
+  if (!alvo) alvo = { id: novoIdDestinatario(), criadoEm: agora };
+  alvo.nome = nome; alvo.email = email; alvo.setor = textoLimpo(d.setor, 80);
+  alvo.usuario = normalizarUsuario(d.usuario).slice(0, 40); alvo.ativo = d.ativo !== false; alvo.atualizadoEm = agora;
+  gravarDestinatario(dados.aba, alvo);
+  return { ok: true, destinatario: destinatarioPublico(alvo), destinatarios: lerDestinatarios(ss).lista.map(destinatarioPublico) };
+}
+
+function excluirDestinatario(ss, req) {
+  const dados = lerDestinatarios(ss);
+  const d = dados.lista.filter(function (x) { return x.id === String(req.id || ''); })[0];
+  if (!d) throw erroAcesso('destinatario', 'Destinatário não encontrado.');
+  dados.aba.deleteRow(d.linha);
+  return { ok: true, excluido: d.nome + ' <' + d.email + '>', destinatarios: lerDestinatarios(ss).lista.map(destinatarioPublico) };
+}
+
+// Traz para o cadastro os usuários do Gerador que já têm e-mail (sem repetir e-mail nem usuário).
+function importarDestinatarios(ss, usuarios) {
+  const dados = lerDestinatarios(ss);
+  const agora = agoraTexto(ss);
+  let n = 0;
+  usuarios.forEach(function (u) {
+    const email = String(u.email || '').trim().toLowerCase();
+    if (!email || u.pendente || u.ativo === false) return;
+    if (dados.lista.some(function (x) { return x.email === email || (x.usuario && x.usuario === u.usuario); })) return;
+    const d = gravarDestinatario(dados.aba, { id: novoIdDestinatario(), nome: u.nome || u.usuario, email: email, setor: '', usuario: u.usuario, ativo: true, criadoEm: agora, atualizadoEm: agora });
+    dados.lista.push(d); n++;
+  });
+  return { ok: true, importados: n, destinatarios: lerDestinatarios(ss).lista.map(destinatarioPublico) };
+}
+
+// ============================================================
+//  E-MAILS CONFERIDOS ANTES DO ENVIO (versão 3.1)
+// ============================================================
+// Cada aviso vira uma linha PENDENTE na aba Emails. O Gerador mostra a prévia e a lista
+// de destinatários cadastrados; o e-mail só sai quando alguém clica Enviar.
+const EM_PENDENTE = 'PENDENTE', EM_ENVIADO = 'ENVIADO', EM_DESCARTADO = 'DESCARTADO';
+
+function lerFilaEmails(ss) {
+  const aba = obterAba(ss, ABA_EMAILS, CAB_EMAILS);
+  const ultima = aba.getLastRow();
+  if (ultima < 2) return { aba: aba, lista: [] };
+  const lista = aba.getRange(2, 1, ultima - 1, CAB_EMAILS.length).getValues().map(function (r, i) {
+    if (!r[0]) return null;
+    let dados = {};
+    try { dados = JSON.parse(String(r[7] || '{}')) || {}; } catch (e) { dados = {}; }
+    return {
+      linha: i + 2, id: String(r[0]), criadoEm: textoCelula(r[1], ss, 'dd/MM/yyyy HH:mm:ss'), tipo: String(r[2] || ''), situacao: String(r[3] || EM_PENDENTE).toUpperCase(),
+      geradoPor: String(r[4] || ''), nome: String(r[5] || ''), resumo: String(r[6] || ''), dados: dados,
+      enviadoPor: String(r[8] || ''), enviadoEm: textoCelula(r[9], ss, 'dd/MM/yyyy HH:mm:ss'), destinatarios: String(r[10] || ''), assunto: String(r[11] || '')
+    };
+  }).filter(function (x) { return x; });
+  return { aba: aba, lista: lista };
+}
+
+function gravarEmailFila(aba, e) {
+  const linha = e.linha || (aba.getLastRow() + 1);
+  aba.getRange(linha, 1, 1, CAB_EMAILS.length).setNumberFormat('@').setValues([[
+    e.id, e.criadoEm, e.tipo, e.situacao, e.geradoPor || '', e.nome || '', e.resumo || '', JSON.stringify(e.dados || {}).slice(0, 49000),
+    e.enviadoPor || '', e.enviadoEm || '', e.destinatarios || '', e.assunto || ''
+  ]]);
+  e.linha = linha;
+  return e;
+}
+
+const NOMES_TIPO_EMAIL = { incluido: 'Pedido incluído', recusado: 'Pedido recusado', reaberto: 'Pedido reaberto', comentario: 'Comentário no pedido', lembrete: 'Lembrete de pedido parado' };
+
+function resumoPedidosEmail(pedidos) {
+  const p0 = pedidos[0] || {};
+  return (p0.de || '') + ' → ' + (p0.para || '') + (pedidos.length > 1 ? ' e mais ' + (pedidos.length - 1) : '');
+}
+
+// Cria o e-mail pendente. "sugeridos" são pessoas (usuários) que normalmente receberiam o aviso;
+// na conferência elas aparecem já marcadas se estiverem no cadastro de destinatários.
+// Devolve o ID do pendente, ou '' se os avisos por e-mail estiverem desligados.
+function enfileirarEmail(ss, tipo, pedidos, quem, extra, sugeridos) {
+  if (!pedidos || !pedidos.length) return '';
+  const modelo = lerModeloEmail().modelo;
+  if (!modelo.ativo) return '';
+  const fila = lerFilaEmails(ss);
+  const agora = agoraTexto(ss);
+  const snap = pedidos.map(function (p) { return { id: p.id, criadoEm: p.criadoEm, usuario: p.usuario, nome: p.nome, de: p.de, para: p.para, qtd: p.qtd, conteudo: p.conteudo, obs: p.obs, minuta: p.minuta || '', atendidoPor: p.atendidoPor || '', atendidoEm: p.atendidoEm || '', motivo: p.motivo || '' }; });
+  const sug = [];
+  (sugeridos || []).forEach(function (u) {
+    if (!u) return;
+    const k = u.usuario || u.email;
+    if (sug.some(function (x) { return (x.usuario || x.email) === k; })) return;
+    sug.push({ usuario: u.usuario || '', nome: u.nome || u.usuario || '', email: String(u.email || '').toLowerCase() });
+  });
+  const dados = { pedidos: snap, extra: extra || {}, atendente: quem ? { usuario: quem.usuario || '', nome: quem.nome || quem.usuario || '', email: quem.email || '' } : null, sugeridos: sug };
+  // O lembrete não se acumula: atualiza o que ainda estiver pendente.
+  let e = tipo === 'lembrete' ? fila.lista.filter(function (x) { return x.tipo === 'lembrete' && x.situacao === EM_PENDENTE; })[0] : null;
+  if (!e) e = { id: 'E' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1296).toString(36).toUpperCase(), situacao: EM_PENDENTE, tipo: tipo };
+  e.criadoEm = agora;
+  e.geradoPor = quem ? (quem.usuario || 'codigo') : 'sistema';
+  e.nome = quem ? (quem.nome || quem.usuario || '') : 'Sistema';
+  e.resumo = (NOMES_TIPO_EMAIL[tipo] || tipo) + ': ' + resumoPedidosEmail(snap);
+  e.dados = dados;
+  gravarEmailFila(fila.aba, e);
+  return e.id;
+}
+
+function podeVerEmail(quem, e) { return e.geradoPor === (quem.usuario || 'codigo') || quem.permissoes.indexOf('emails.enviar') >= 0; }
+
+// Sugeridos que estão no cadastro (ligados pelo usuário do Gerador ou pelo e-mail) e os que faltam cadastrar.
+function casarSugeridos(sugeridos, destinatarios) {
+  const ids = [], faltam = [];
+  (sugeridos || []).forEach(function (s) {
+    const d = destinatarios.filter(function (x) { return x.ativo && ((s.usuario && x.usuario === s.usuario) || (s.email && x.email === s.email)); })[0];
+    if (d) { if (ids.indexOf(d.id) < 0) ids.push(d.id); }
+    else faltam.push({ usuario: s.usuario, nome: s.nome, email: s.email });
+  });
+  return { ids: ids, faltam: faltam };
+}
+
+function emailPublico(e, destinatarios, usuarios) {
+  const sug = (e.dados.sugeridos || []).map(function (s) {
+    // E-mail atual do usuário (pode ter sido cadastrado depois do aviso).
+    const u = s.usuario ? usuarios.filter(function (x) { return x.usuario === s.usuario; })[0] : null;
+    return { usuario: s.usuario, nome: (u && u.nome) || s.nome, email: (u && u.email) || s.email };
+  });
+  const casados = casarSugeridos(sug, destinatarios);
+  const ex = e.dados.extra || {};
+  return {
+    id: e.id, criadoEm: e.criadoEm, tipo: e.tipo, nomeTipo: NOMES_TIPO_EMAIL[e.tipo] || e.tipo, situacao: e.situacao, geradoPor: e.geradoPor, nome: e.nome, resumo: e.resumo,
+    pedidos: (e.dados.pedidos || []).map(function (p) { return { de: p.de, para: p.para, qtd: p.qtd, conteudo: p.conteudo, nome: p.nome, minuta: p.minuta, motivo: p.motivo, obs: p.obs }; }),
+    extra: { comentario: ex.comentario || '', autor: ex.autor || '', nota: ex.nota || '', horas: ex.horas || '' },
+    sugeridos: casados.ids, semCadastro: casados.faltam,
+    enviadoPor: e.enviadoPor, enviadoEm: e.enviadoEm, destinatarios: e.destinatarios, assunto: e.assunto
+  };
+}
+
+function listarEmails(ss, usuarios, quem) {
+  const dest = lerDestinatarios(ss).lista;
+  const visiveis = lerFilaEmails(ss).lista.filter(function (e) { return podeVerEmail(quem, e); });
+  const pendentes = visiveis.filter(function (e) { return e.situacao === EM_PENDENTE; });
+  const recentes = visiveis.filter(function (e) { return e.situacao !== EM_PENDENTE; }).reverse().slice(0, 30);
+  return {
+    ok: true,
+    pendentes: pendentes.map(function (e) { return emailPublico(e, dest, usuarios); }),
+    recentes: recentes.map(function (e) { return emailPublico(e, dest, usuarios); }),
+    destinatarios: dest.filter(function (d) { return d.ativo; }).map(destinatarioPublico),
+    podeEditar: quem.permissoes.indexOf('cadastros.editar') >= 0,
+    podeTodos: quem.permissoes.indexOf('emails.enviar') >= 0,
+    avisosLigados: !!lerModeloEmail().modelo.ativo
+  };
+}
+
+function pegarEmailFila(ss, quem, id) {
+  const fila = lerFilaEmails(ss);
+  const e = fila.lista.filter(function (x) { return x.id === String(id || ''); })[0];
+  if (!e) throw erroAcesso('email', 'E-mail não encontrado. Atualize a lista.');
+  if (!podeVerEmail(quem, e)) throw erroAcesso('permissao', 'Só quem gerou este e-mail ou quem tem "Conferir e enviar e-mails" pode mexer nele.');
+  return { fila: fila, e: e };
+}
+
+// Monta a mensagem de um pendente para um destinatário (prévia e envio usam a mesma função).
+function mensagemFila(e, destino, modelo) {
+  const pedidos = e.dados.pedidos || [];
+  if (!pedidos.length) throw erroAcesso('email', 'Este e-mail não tem pedidos.');
+  const at = e.dados.atendente;
+  return montarEmailPedido(e.tipo, destino, pedidos, at && at.nome ? at : null, modelo, e.dados.extra || {});
+}
+
+function previaEmailFila(ss, usuarios, quem, req) {
+  const e = pegarEmailFila(ss, quem, req.id).e;
+  const dest = lerDestinatarios(ss).lista;
+  let destino = dest.filter(function (x) { return x.id === String(req.destinatario || ''); })[0];
+  if (!destino) {
+    const s = (e.dados.sugeridos || [])[0];
+    destino = s ? { nome: s.nome, usuario: s.usuario, email: s.email || '' } : { nome: 'Destinatário', usuario: '', email: '' };
+  }
+  const msg = mensagemFila(e, destino, lerModeloEmail().modelo);
+  return { ok: true, assunto: msg.assunto, html: msg.html, para: destino.nome };
+}
+
+function enviarEmailFila(ss, quem, req) {
+  const r = pegarEmailFila(ss, quem, req.id), e = r.e;
+  if (e.situacao !== EM_PENDENTE) throw erroAcesso('email', 'Este e-mail já foi ' + (e.situacao === EM_ENVIADO ? 'enviado' : 'descartado') + (e.enviadoPor ? ' por ' + e.enviadoPor : '') + '.');
+  const ids = (Array.isArray(req.destinatarios) ? req.destinatarios : []).map(String);
+  const dest = lerDestinatarios(ss).lista.filter(function (d) { return d.ativo && d.email && ids.indexOf(d.id) >= 0; });
+  if (!dest.length) throw erroAcesso('email', 'Marque pelo menos um destinatário do cadastro.');
+  const modelo = lerModeloEmail().modelo;
+  const cota = MailApp.getRemainingDailyQuota();
+  if (cota < dest.length) throw erroAcesso('email', 'A cota diária de e-mails do Google acabou (restam ' + cota + '). Tente amanhã ou marque menos destinatários.');
+  const at = e.dados.atendente;
+  const responder = modelo.responderPara || (at && at.email) || '';
+  const enviados = [];
+  let assunto = '';
+  dest.forEach(function (d) {
+    const msg = mensagemFila(e, d, modelo);
+    const opcoes = { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html };
+    if (responder) opcoes.replyTo = responder;
+    MailApp.sendEmail(d.email, msg.assunto, msg.texto, opcoes);
+    enviados.push(d.nome + ' <' + d.email + '>');
+    assunto = assunto || msg.assunto;
+  });
+  e.situacao = EM_ENVIADO; e.enviadoPor = quem.nome || quem.usuario || ''; e.enviadoEm = agoraTexto(ss);
+  e.destinatarios = enviados.join(', '); e.assunto = assunto;
+  gravarEmailFila(r.fila.aba, e);
+  return { ok: true, enviados: enviados.length, para: enviados, assunto: assunto, cota: MailApp.getRemainingDailyQuota() };
+}
+
+function descartarEmailFila(ss, quem, req) {
+  const r = pegarEmailFila(ss, quem, req.id), e = r.e;
+  if (e.situacao !== EM_PENDENTE) throw erroAcesso('email', 'Este e-mail não está mais pendente.');
+  e.situacao = EM_DESCARTADO; e.enviadoPor = quem.nome || quem.usuario || ''; e.enviadoEm = agoraTexto(ss);
+  gravarEmailFila(r.fila.aba, e);
+  return { ok: true, resumo: e.resumo };
 }

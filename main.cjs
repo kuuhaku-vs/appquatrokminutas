@@ -869,7 +869,7 @@ function historicoDeSheets(lista) {
 ipcMain.handle('auth:sessao', (_e, token) => { sessaoUsuario = String(token || ''); return true; });
 ipcMain.handle('auth:chamar', async (_e, p) => {
   const acao = String(p?.acao || '');
-  if (!/^(auth|usuarios|pedidos)\.[a-z]+$/.test(acao)) return { ok: false, error: 'Ação inválida.' };
+  if (!/^(auth|usuarios|pedidos|emails|destinatarios)\.[a-z]+$/.test(acao)) return { ok: false, error: 'Ação inválida.' };
   if (!sheetsCfg().url) return { ok: false, codigo: 'semurl', error: 'O Google Sheets não está configurado neste computador.' };
   try { return await sheetsPost({ ...(p?.dados || {}), acao }, 30000); }
   catch (e) { return { ok: false, error: String(e?.message || e), codigo: e?.codigo, versao: e?.versao }; }

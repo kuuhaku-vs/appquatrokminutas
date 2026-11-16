@@ -196,6 +196,7 @@ function go(v) {
   if (destino === 'config') renderCfg();
   if (destino === 'usuarios') window.AUTH?.renderUsuarios?.();
   if (destino === 'pedidos') window.PEDIDOS?.render?.();
+  if (destino === 'destinatarios') window.DESTINATARIOS?.render?.();
 }
 document.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => go(b.dataset.go)));
 function fecharModal(modal) {

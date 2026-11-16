@@ -27,17 +27,18 @@
     { id: 'minutas.editar', grupo: 'alterar', nome: 'Alterar minutas', dica: 'Reabrir e gravar de novo minutas já registradas' },
     { id: 'minutas.excluir', grupo: 'alterar', nome: 'Excluir minutas', dica: 'Remover minutas da planilha' },
     { id: 'pedidos.excluir', grupo: 'alterar', nome: 'Excluir pedidos', dica: 'Apagar pedidos de envio recusados ou cancelados' },
-    { id: 'cadastros.editar', grupo: 'alterar', nome: 'Alterar cadastros', dica: 'Pessoas, setores e remetente/destinatário padrão' },
+    { id: 'cadastros.editar', grupo: 'alterar', nome: 'Alterar cadastros', dica: 'Pessoas, setores, destinatários de e-mail e remetente/destinatário padrão' },
+    { id: 'emails.enviar', grupo: 'alterar', nome: 'Conferir e enviar e-mails', dica: 'Ver e enviar todos os e-mails pendentes (inclusive o lembrete). Sem isso, a pessoa confere só os e-mails das próprias ações' },
     { id: 'usuarios.gerenciar', grupo: 'admin', nome: 'Gerenciar usuários', dica: 'Só o perfil Administrador cria usuários e define o que cada um pode fazer' },
   ];
   const TODAS = PERMS.map((p) => p.id);
   const PERFIS = {
     admin: { nome: 'Administrador', dica: 'Acesso total, incluindo usuários.', perms: TODAS },
-    operador: { nome: 'Operador', dica: 'Cria e altera minutas. Não exclui.', perms: ['minutas.criar', 'minutas.editar', 'historico.ver', 'frete.usar', 'cadastros.editar'] },
+    operador: { nome: 'Operador', dica: 'Cria e altera minutas. Não exclui.', perms: ['minutas.criar', 'minutas.editar', 'historico.ver', 'frete.usar', 'cadastros.editar', 'emails.enviar'] },
     consulta: { nome: 'Consulta', dica: 'Vê o histórico e pede envios.', perms: ['historico.ver', 'pedidos.criar'] },
     personalizado: { nome: 'Personalizado', dica: 'Você marca item por item.', perms: null },
   };
-  const TELAS = { nova: ['minutas.criar', 'minutas.editar'], pedidos: ['pedidos.criar', 'pedidos.excluir', 'minutas.criar', 'minutas.editar'], historico: ['historico.ver'], frete: ['frete.usar'], config: ['config.acessar'], usuarios: ['usuarios.gerenciar'] };
+  const TELAS = { nova: ['minutas.criar', 'minutas.editar'], pedidos: ['pedidos.criar', 'pedidos.excluir', 'minutas.criar', 'minutas.editar'], historico: ['historico.ver'], destinatarios: ['cadastros.editar', 'emails.enviar'], frete: ['frete.usar'], config: ['config.acessar'], usuarios: ['usuarios.gerenciar'] };
 
   // ---------- estado e sessão guardada ----------
   const S = { usuario: null, token: '', expira: 0, lembrar: false, legado: false, appCarregado: false, logado: false, cadastroAberto: true };
@@ -160,7 +161,7 @@
       <label class="field"><span>E-mail</span><input id="contaEmail" type="email" autocomplete="email" maxlength="120" title="Você recebe um e-mail quando um pedido de envio seu for incluído na minuta ou recusado. Deixe em branco para não receber." /></label>
       <button class="ghost" id="btnSalvarEmail" type="button">Salvar e-mail</button>
     </div>
-    <p class="hint">Avisamos neste e-mail quando um pedido de envio seu for incluído na minuta ou recusado.</p>
+    <p class="hint">Com este e-mail você pode entrar no cadastro de destinatários e receber os avisos dos seus pedidos de envio. A Expedição confere cada aviso antes de enviar.</p>
     <div class="conta-sep"></div>
     <span class="sub-title">Trocar senha</span>
     <div class="fgrid">

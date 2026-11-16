@@ -262,8 +262,8 @@
     box.hidden = false;
     box.classList.toggle('sem', !u.email);
     $('pedEmailTxt').textContent = u.email
-      ? 'Você recebe um e-mail em ' + u.email + ' quando o pedido for incluído na minuta, recusado, reaberto ou comentado.'
-      : 'Cadastre o seu e-mail para ser avisado quando o pedido for incluído na minuta, recusado, reaberto ou comentado.';
+      ? 'Quando o pedido for incluído na minuta, recusado, reaberto ou comentado, a Expedição confere e envia o aviso para ' + u.email + ' (se você estiver no cadastro de destinatários).'
+      : 'Cadastre o seu e-mail para que a Expedição possa incluir você no cadastro de destinatários e mandar os avisos dos seus pedidos.';
     $('pedEmailBtn').textContent = u.email ? 'Alterar' : 'Cadastrar e-mail';
   }
   $('pedEmailBtn')?.addEventListener('click', () => { $('sbUser')?.click(); setTimeout(() => $('contaEmail')?.focus(), 120); });
@@ -383,6 +383,7 @@
     if (!r?.ok) return window.toast?.(r?.error || 'Não foi possível recusar o pedido.', true);
     window.fecharModal?.($('mPedRecusar')); recusando = null;
     window.toast?.('Pedido recusado. Quem pediu vai ver o motivo.'); carregar();
+    window.EMAILS?.conferir(r.emailsPendentes); // confira o e-mail e marque quem recebe antes de enviar
   });
 
   // ---------- Reabrir pedido (recusado ou cancelado volta para a fila) ----------
@@ -392,7 +393,7 @@
     reabrindo = p;
     const eu = AUTH()?.usuario?.usuario;
     $('pedReaResumo').innerHTML = `<b>${esc(resumo(p))}</b><br><small>${p.qtd} × ${esc(p.conteudo)} · pedido por ${esc(p.nome)} · ${p.situacao === 'RECUSADO' ? 'recusado' + (p.motivo ? ': ' + esc(p.motivo) : '') : 'cancelado'}</small>`;
-    $('pedReaAviso').textContent = p.usuario === eu ? '' : `${p.nome} recebe um aviso (e um e-mail, se tiver cadastrado).`;
+    $('pedReaAviso').textContent = p.usuario === eu ? '' : `${p.nome} recebe um aviso no app. O e-mail você confere e envia em seguida.`;
     $('pedReaNota').value = '';
     window.abrirModal?.($('mPedReabrir'));
     setTimeout(() => $('pedReaNota').focus(), 60);
@@ -410,7 +411,8 @@
     situacaoAnterior.set(r.pedido.id, 'AGUARDANDO'); conhecidos.add(r.pedido.id);
     window.fecharModal?.($('mPedReabrir')); reabrindo = null;
     render(); atualizarAvisos(); atualizarSino();
-    window.toast?.(`Pedido ${resumo(r.pedido)} voltou para a fila.${r.emailsEnviados ? ' Quem pediu foi avisado por e-mail.' : ''}`);
+    window.toast?.(`Pedido ${resumo(r.pedido)} voltou para a fila.`);
+    window.EMAILS?.conferir(r.emailsPendentes);
   });
 
   // ---------- Central de notificações (comentários) ----------
@@ -493,7 +495,7 @@
       : '<div class="us-empty">Nenhum comentário ainda. Escreva abaixo para conversar sobre este pedido.</div>';
     if (noFim || !box.dataset.aberto) { box.scrollTop = box.scrollHeight; box.dataset.aberto = '1'; }
     const meu = !eu || p.usuario === eu;
-    $('pedComNota').textContent = meu ? 'Quem monta o malote recebe um aviso (e um e-mail, se tiver cadastrado).' : `${p.nome} recebe um aviso (e um e-mail, se tiver cadastrado).`;
+    $('pedComNota').textContent = (meu ? 'Quem monta o malote recebe um aviso no app.' : `${p.nome} recebe um aviso no app.`) + ' Se quiser mandar e-mail, você confere a mensagem e escolhe quem recebe logo depois de enviar.';
     marcarLido(p);
   }
   function abrirComentarios(id) {
@@ -518,6 +520,7 @@
     $('pedComLista').dataset.aberto = '';
     renderComentarios(); render();
     $('pedComTexto').focus();
+    window.EMAILS?.conferir(r.emailsPendentes);
   }
   $('pedComEnviar').addEventListener('click', enviarComentario);
   $('pedComTexto').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.stopPropagation(); enviarComentario(); } });

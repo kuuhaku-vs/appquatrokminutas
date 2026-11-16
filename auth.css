@@ -11,6 +11,7 @@
 .np-tela-config [data-go="config"],
 .np-tela-usuarios [data-go="usuarios"],
 .np-tela-pedidos [data-go="pedidos"],
+.np-tela-destinatarios [data-go="destinatarios"],
 .np-pedidos-criar #pedNovoCard,
 .np-minutas-criar #btnNova,
 .np-minutas-criar [data-dup],
@@ -386,3 +387,60 @@
 .notif-txt em { color: var(--muted); font-size: 11px; font-style: normal; }
 .notif-vazio { padding: 22px 16px; color: var(--muted); font-size: 12.5px; text-align: center; line-height: 1.5; }
 @media (max-width: 720px) { .vh-actions .notif-btn { width: 36px; } }
+
+/* ---------- Destinatários e e-mails conferidos (v3.1) ---------- */
+.ds-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.ds-grid + .note, #dsAntigo { margin: 0 0 14px; }
+.ds-hint { margin: -6px 0 14px; }
+.ds-toolbar { display: flex; margin-bottom: 10px; }
+.ds-toolbar .search { max-width: none; }
+.ds-lista { display: flex; flex-direction: column; }
+.ds-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 10px 4px; border-top: 1px solid var(--border); }
+.ds-row:first-child { border-top: 0; }
+.ds-row.off .us-who { opacity: .55; }
+.ds-row .us-who small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ds-para { display: block; overflow-wrap: anywhere; }
+.act button.ds-conferir { background: var(--accent); color: #fff; padding: 0 11px; }
+.act button.ds-conferir:hover { background: var(--accent-2); color: #fff; border-color: transparent; }
+.act button.ds-conferir svg, .act button.ds-conferir .ico { width: 14px; height: 14px; }
+.ec-box { width: min(1180px, 100%); height: min(820px, calc(100vh - 48px)); }
+.ec-body { display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); gap: 18px; padding: 16px 20px; min-height: 0; flex: 1; overflow: hidden; }
+.ec-para { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: hidden; }
+.ec-para .search { flex: none; max-width: none; }
+.ec-para-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ec-para-head .sub-title { margin: 0; }
+.ec-cont { color: var(--muted); font-size: 11.5px; }
+.ec-marcar { display: flex; gap: 14px; margin-top: -4px; }
+.ec-marcar .lg-link { padding: 0; }
+.ec-lista { flex: 1; min-height: 80px; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+.ec-dest { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; }
+.ec-dest:hover { border-color: var(--accent-ring); }
+.ec-dest.on { border-color: var(--accent); background: var(--accent-soft); }
+.ec-dest input { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; }
+.ec-dest-txt { display: flex; flex-direction: column; min-width: 0; }
+.ec-dest-txt b { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ec-dest-txt small { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ec-dest .perm-chip { height: 20px; font-size: 10px; }
+.ec-faltam { display: flex; flex-direction: column; gap: 6px; flex: none; max-height: 30%; overflow: auto; }
+.ec-faltam:empty { display: none; }
+.ec-falta { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--warn-soft); color: var(--text-2); font-size: 12px; line-height: 1.4; }
+.ec-falta .ico, .ec-falta svg { width: 15px; height: 15px; color: var(--warn); }
+.ec-novo { align-self: flex-start; flex: none; }
+.ec-preview { min-height: 0; }
+.ec-frame { flex: 1; width: 100%; min-height: 0; overflow: auto; background: #eef1f6; }
+.ec-pos { margin-right: auto; color: var(--muted); font-size: 12px; }
+.ec-descartar { color: var(--danger) !important; }
+.ec-descartar + .ec-pos { margin-left: 8px; }
+@media (max-width: 1000px) { .ds-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) {
+  .ec-box { height: auto; }
+  .ec-body { grid-template-columns: 1fr; overflow: visible; flex: none; }
+  .ec-para { overflow: visible; }
+  .ec-lista { flex: none; max-height: 300px; }
+  .ec-preview { flex: none; }
+  .ec-frame { flex: none; height: 520px; }
+}
+@media (max-width: 720px) {
+  .ec-box .m-foot { flex-wrap: wrap; }
+  .ec-pos { width: 100%; order: -1; }
+}
