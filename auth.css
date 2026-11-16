@@ -623,3 +623,22 @@ body[data-screen="config"] .sb-gear, body[data-screen="config"] .m-gear { backgr
   #v-inicio .in-head .vh-actions button { width: 38px !important; padding: 0 !important; }
   #v-inicio .in-head .vh-actions button span { display: none !important; }
 }
+
+/* =========================================================
+   FRETE CORTESIA DENTRO DA NOVA MINUTA (abas no topo)
+========================================================= */
+.nova-abas { display: inline-flex; gap: 4px; padding: 4px; margin: 0 0 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); max-width: 100%; }
+.nova-aba { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--text-2); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s; }
+.nova-aba .ico { width: 16px; height: 16px; }
+.nova-aba:hover { color: var(--text); background: var(--surface-3); }
+.nova-aba.active { background: var(--accent); color: #fff; box-shadow: 0 4px 12px var(--accent-ring); }
+.nova-aba.active .ico { color: #fff; }
+/* Quem só tem uma das duas telas não vê as abas. */
+.np-tela-nova .nova-abas, .np-tela-frete .nova-abas { display: none; }
+/* O Frete cortesia sai do menu (fica na aba). Só aparece no menu para quem não tem a Nova minuta. */
+html:not(.np-tela-nova) .sb-nav .nav[data-go="frete"] { display: none !important; }
+#v-frete .screen-home { display: none; }
+@media (max-width: 760px) {
+  .nova-abas { display: flex; width: 100%; }
+  .nova-aba { flex: 1; justify-content: center; padding: 0 8px; }
+}

@@ -28,8 +28,9 @@
     ['atendente', 'Quem incluiu ou recusou'], ['data', 'Data e hora da inclusão ou recusa'],
     ['de', 'Quem está enviando'], ['para', 'Para quem vai'], ['motivo', 'Motivo da recusa'],
     ['nota', 'Observação de quem reabriu o pedido'], ['autor', 'Quem escreveu o comentário'], ['comentario', 'Texto do comentário'], ['horas', 'Horas do lembrete'], ['total', 'Quantidade de pedidos parados'],
+    ['total_itens', 'Itens do malote (ex.: "3 itens")'], ['volumes', 'Volumes do malote'], ['origem', 'Remetente do malote'], ['destino', 'Destinatário do malote'], ['envolvidos', 'Quem foi avisado do despacho'],
   ];
-  const TIPOS = { incluido: 'pedido incluído', recusado: 'pedido recusado', reaberto: 'pedido reaberto', comentario: 'comentário no pedido', lembrete: 'lembrete de pedido parado' };
+  const TIPOS = { despachado: 'malote despachado', recusado: 'pedido recusado', reaberto: 'pedido reaberto', comentario: 'comentário no pedido', lembrete: 'lembrete de pedido parado' };
   const CAMPOS = [['minuta', 'Nº da minuta'], ['de', 'De'], ['para', 'Para'], ['quantidade', 'Quantidade e conteúdo'], ['observacao', 'Observação'], ['pedidoEm', 'Data do pedido'], ['motivo', 'Motivo (recusa)']];
 
   const campoTxt = (k, rotulo, dica, opts = {}) => {
@@ -60,9 +61,10 @@
     </div>
     <div class="m-body em-body">
       <div class="em-form" id="emForm">
-        <div class="seg em-tabs" role="tablist"><button type="button" class="active" data-em-tipo="incluido">Incluído</button><button type="button" data-em-tipo="recusado">Recusado</button><button type="button" data-em-tipo="reaberto">Reaberto</button><button type="button" data-em-tipo="comentario">Comentário</button><button type="button" data-em-tipo="lembrete">Lembrete</button></div>
+        <div class="seg em-tabs" role="tablist"><button type="button" class="active" data-em-tipo="despachado">Despachado</button><button type="button" data-em-tipo="recusado">Recusado</button><button type="button" data-em-tipo="reaberto">Reaberto</button><button type="button" data-em-tipo="comentario">Comentário</button><button type="button" data-em-tipo="lembrete">Lembrete</button></div>
         <p class="hint em-tipo-desc" id="emTipoDesc"></p>
 
+        <div class="chips-check" data-tipo="despachado"><label><input type="checkbox" data-k="despachado.ativo" /><span>Enviar o aviso de malote despachado para todos os envolvidos</span></label></div>
         <div class="em-lembrete" data-tipo="lembrete">
           <span class="sub-title">Lembrete de pedido parado</span>
           <div class="chips-check"><label><input type="checkbox" data-k="lembrete.ativo" /><span>Enviar lembrete de pedido parado para quem pediu</span></label></div>
@@ -85,7 +87,7 @@
         <span class="sub-title">Mensagem · <b id="emTipoNome">pedido incluído</b></span>
         <div class="fgrid">
           ${campoTxt('saudacao', 'Saudação <i>(vale para todos)</i>', 'Primeira linha do e-mail. Vazio esconde.', { span: 1, max: 120 })}
-          ${tipoCampos('incluido')}
+          ${tipoCampos('despachado')}
           ${tipoCampos('recusado')}
           ${tipoCampos('reaberto')}
           ${tipoCampos('comentario')}
@@ -134,7 +136,7 @@
   modal.addEventListener('mousedown', (e) => { if (e.target === modal) window.fecharModal?.(modal); });
 
   // ---------- Estado ----------
-  let modelo = null, padrao = null, personalizado = false, tipo = 'incluido', ultimoCampo = null, timerPrevia = 0, seqPrevia = 0, sujo = false;
+  let modelo = null, padrao = null, personalizado = false, tipo = 'despachado', ultimoCampo = null, timerPrevia = 0, seqPrevia = 0, sujo = false;
 
   // Prévia num Shadow DOM (não num iframe): funciona com a política de segurança do app,
   // inclusive no programa do Windows. innerHTML não executa scripts; o e-mail só tem estilos em linha.
@@ -167,7 +169,7 @@
     modal.querySelectorAll('[data-tipo]').forEach((el) => (el.hidden = el.dataset.tipo !== t));
     $('emTipoNome').textContent = TIPOS[t];
     $('emTipoDesc').textContent = {
-      incluido: 'Vai para quem fez o pedido quando ele entra numa minuta.',
+      despachado: 'Vai automático, uma vez, quando a minuta é registrada: para quem pediu os envios, para quem recebe cada item (cadastro de destinatários) e para quem está "Sempre em cópia". O e-mail mostra o malote inteiro e quem foi avisado.',
       recusado: 'Vai para quem fez o pedido quando ele é recusado, com o motivo.',
       reaberto: 'Vai para quem fez o pedido quando um pedido recusado (ou cancelado) volta para a fila, para um envio posterior.',
       comentario: 'Quando quem monta o malote comenta, vai automático para quem pediu. Quando quem pediu comenta, o e-mail fica para conferir antes de enviar.',
@@ -203,7 +205,7 @@
     st.className = 'perm-chip ' + (r.modelo.ativo ? 'ok' : 'off');
     st.textContent = (r.modelo.ativo ? 'Ligado' : 'Desligado') + ' · ' + (personalizado ? 'modelo personalizado' : 'modelo padrão');
     $('emResumo').textContent = r.modelo.ativo
-      ? `Avisos de pedido incluído, recusado, reaberto e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Quem pediu recebe automático; os outros destinatários só depois de conferido (tela Destinatários). Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
+      ? `Aviso geral de malote despachado${r.modelo.despachado?.ativo === false ? ' (desligado)' : ''} para todos os envolvidos, avisos de pedido recusado, reaberto e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Quem pediu recebe automático; os outros destinatários só depois de conferido (tela Destinatários). Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
       : 'Os avisos por e-mail estão desligados. Abra o modelo para ligar de novo.';
   }
   const AUTH = window.AUTH;
@@ -222,7 +224,7 @@
     preencher(modelo);
     mostrarPrevia('');
     window.abrirModal?.(modal);
-    mostrarTipo('incluido');
+    mostrarTipo('despachado');
   });
   modal.querySelectorAll('[data-em-tipo]').forEach((b) => b.addEventListener('click', () => mostrarTipo(b.dataset.emTipo)));
   $('emForm').addEventListener('input', () => { sujo = true; atualizarPrevia(); });

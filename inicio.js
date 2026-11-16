@@ -200,6 +200,8 @@
   new MutationObserver(() => {
     const tela = document.body.dataset.screen;
     if (tela === 'inicio') carregar();
+    // Frete cortesia é uma aba da Nova minuta: o menu continua marcando "Nova minuta".
+    document.querySelector('.sb-nav .nav[data-go="nova"]')?.classList.toggle('active', tela === 'nova' || tela === 'frete');
     arrumarBarra();
   }).observe(document.body, { attributes: true, attributeFilter: ['data-screen'] });
   window.addEventListener('gm-entrou', () => setTimeout(arrumarBarra, 50));

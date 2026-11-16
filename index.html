@@ -12,8 +12,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" /><meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Minutas 4K" /><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <script>try{if(localStorage.getItem('gm-tema')==='light')document.documentElement.dataset.theme='light'}catch(e){}</script>
-<link rel="stylesheet" href="style.css?v=20261116-1400" />
-<link rel="stylesheet" href="auth.css?v=20261116-1400" />
+<link rel="stylesheet" href="style.css?v=20261116-1430" />
+<link rel="stylesheet" href="auth.css?v=20261116-1430" />
 </head>
 <body>
 
@@ -76,6 +76,10 @@
 
     <!-- ===== NOVA MINUTA ===== -->
     <section id="v-nova" class="view">
+      <nav class="nova-abas" aria-label="Documentos da expedição">
+        <button type="button" class="nova-aba active" data-go="nova" data-ico="filePlus" aria-current="page"><span>Minuta de despacho</span></button>
+        <button type="button" class="nova-aba" data-go="frete" data-ico="mail"><span>Frete cortesia</span></button>
+      </nav>
       <header class="vh vh-sticky">
         <div class="doc-id">
           <span class="eyebrow">Minuta de despacho</span>
@@ -172,6 +176,10 @@
 
     <!-- ===== FRETE CORTESIA / MALOTE ===== -->
     <section id="v-frete" class="view">
+      <nav class="nova-abas" aria-label="Documentos da expedição">
+        <button type="button" class="nova-aba" data-go="nova" data-ico="filePlus"><span>Minuta de despacho</span></button>
+        <button type="button" class="nova-aba active" data-go="frete" data-ico="mail" aria-current="page"><span>Frete cortesia</span></button>
+      </nav>
       <header class="vh">
         <div class="vh-title">
           <button class="icon-btn ghost screen-home" type="button" data-go="nova" title="Voltar à minuta" data-ico="back"><span class="sr">Voltar</span></button>
@@ -506,19 +514,19 @@
 </div></div>
 
 <div id="toast"></div>
-<script src="config.js?v=20261116-1400"></script>
-<script src="web-api.js?v=20261116-1400"></script>
-<script src="ui.js?v=20261116-1400"></script>
-<script src="logo.js?v=20261116-1400"></script>
-<script src="print.js?v=20261116-1400"></script>
-<script src="frete-cortesia.js?v=20261116-1400"></script>
+<script src="config.js?v=20261116-1430"></script>
+<script src="web-api.js?v=20261116-1430"></script>
+<script src="ui.js?v=20261116-1430"></script>
+<script src="logo.js?v=20261116-1430"></script>
+<script src="print.js?v=20261116-1430"></script>
+<script src="frete-cortesia.js?v=20261116-1430"></script>
 <!-- O app.js é carregado pelo auth.js depois do login. -->
-<script src="auth.js?v=20261116-1400" data-app="app.js?v=20261116-1400"></script>
-<script src="pedidos.js?v=20261116-1400"></script>
-<script src="inicio.js?v=20261116-1400"></script>
-<script src="destinatarios.js?v=20261116-1400"></script>
-<script src="email-modelo.js?v=20261116-1400"></script>
-<script src="auditoria.js?v=20261116-1400"></script>
+<script src="auth.js?v=20261116-1430" data-app="app.js?v=20261116-1430"></script>
+<script src="pedidos.js?v=20261116-1430"></script>
+<script src="inicio.js?v=20261116-1430"></script>
+<script src="destinatarios.js?v=20261116-1430"></script>
+<script src="email-modelo.js?v=20261116-1430"></script>
+<script src="auditoria.js?v=20261116-1430"></script>
 <script>if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});</script>
 </body>
 </html>

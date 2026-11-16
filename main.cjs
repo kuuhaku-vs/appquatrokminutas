@@ -2,6 +2,10 @@ const { app, BrowserWindow, ipcMain, shell, dialog, screen } = require('electron
 const path = require('path');
 const fs = require('fs');
 
+// Ícone do Gerador de Minutas na janela e na barra de tarefas (o .exe vem de outro projeto e traz outro ícone).
+const ICONE = path.join(__dirname, 'icon.ico');
+if (process.platform === 'win32') { try { app.setAppUserModelId('br.com.quatrok.' + (require('./package.json').name || 'gerador-minuta')); } catch {} }
+
 // Pasta de dados ao lado do .exe (portátil, sem precisar de administrador)
 function resolveDataDir() {
   const exeDir = path.dirname(process.execPath);
@@ -63,6 +67,7 @@ function createWindow() {
     minWidth: 900, minHeight: 600,
     backgroundColor: '#0b1020', title: 'Gerador de Minutas · Quatro K',
     autoHideMenuBar: true,
+    ...(fs.existsSync(ICONE) ? { icon: ICONE } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false },
   };
   if (Number.isInteger(state.x) && Number.isInteger(state.y)) { options.x = state.x; options.y = state.y; }

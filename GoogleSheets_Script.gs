@@ -132,7 +132,7 @@ const CAB_EMAILS = ['ID', 'Criado em', 'Tipo', 'Situação', 'Gerado por', 'Nome
 const CAB_COMENTARIOS = ['Pedido', 'Data', 'Usuário', 'Nome', 'Comentário'];
 const CAB_AUDITORIA = ['Data', 'Usuário', 'Nome', 'Ação', 'Alvo', 'Detalhes'];
 const MAX_AUDITORIA = 20000; // linhas guardadas na aba Auditoria (as mais antigas saem)
-const VERSAO_SCRIPT = '3.4';
+const VERSAO_SCRIPT = '3.5';
 
 // ---------- Avisos por e-mail ----------
 const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
@@ -296,6 +296,9 @@ function processar(req, ss, ctx) {
       ordenar(abaM, CAB_MINUTAS.length);
       ordenar(abaI, CAB_ITENS.length);
       const inc = marcarPedidosIncluidos(ss, itens, numeroTexto, quem);
+      // E-mail geral "Malote despachado": só na primeira gravação da minuta (ou quando entram pedidos novos numa regravação).
+      const desp = (!alterada || inc.novos.length) ? avisarDespacho(ss, m, itens, numeroTexto, quem, inc.novos, alterada) : { automaticos: 0 };
+      inc.automaticos += desp.automaticos;
       return ({ ok: true, pdf: linkPdf, url: ss.getUrl(), pedidosIncluidos: inc.qtd, emailsPendentes: inc.emails, emailsAutomaticos: inc.automaticos, alterada: alterada, qtdItens: itens.length });
     }
 
@@ -796,7 +799,7 @@ function cancelarPedido(ss, quem, req) {
 // Chamado ao registrar uma minuta: itens que vieram de um pedido marcam o pedido como incluído.
 function marcarPedidosIncluidos(ss, itens, numeroTexto, quem) {
   const ids = itens.map(function (i) { return String(i.pedidoId || ''); }).filter(String);
-  if (!ids.length) return { qtd: 0, emails: [], automaticos: 0 };
+  if (!ids.length) return { qtd: 0, emails: [], automaticos: 0, novos: [] };
   const dados = lerPedidos(ss);
   let n = 0;
   const novos = []; // só gera o aviso por e-mail na primeira inclusão (regravar a mesma minuta não gera de novo)
@@ -807,8 +810,8 @@ function marcarPedidosIncluidos(ss, itens, numeroTexto, quem) {
     p.situacao = SIT_INCLUIDO; p.minuta = numeroTexto; p.atendidoPor = quem.nome || quem.usuario || ''; p.atendidoEm = agoraTexto(ss); p.motivo = '';
     gravarPedido(dados.aba, p); n++;
   });
-  const r = novos.length ? avisarPedidosPorEmail(ss, novos, 'incluido', quem) : { pendentes: [], automaticos: 0 };
-  return { qtd: n, emails: r.pendentes, automaticos: r.automaticos };
+  // O aviso de inclusão agora vai no e-mail geral "Malote despachado" (avisarDespacho), para todos os envolvidos.
+  return { qtd: n, emails: [], automaticos: 0, novos: novos };
 }
 
 // Chamado ao excluir uma minuta: os pedidos dela voltam a aguardar.
@@ -1082,6 +1085,14 @@ function modeloEmailPadrao() {
     faixa: 'Expedição · Pedidos de envio',
     mostrarLogo: true,
     saudacao: 'Olá, {primeiro_nome},',
+    despachado: {
+      ativo: true,
+      assunto: 'Malote despachado · minuta nº {minuta} ({total_itens})',
+      abertura: 'O **malote da minuta nº {minuta}** foi despachado. Você está recebendo este aviso porque faz parte deste envio. Confira abaixo o que seguiu no malote.',
+      selo: 'DESPACHADO',
+      linhaAtendente: 'Despachado por **{atendente}** em {data}.',
+      fechamento: 'Se algo estiver diferente do esperado, responda a este e-mail ou fale com a equipe de Expedição o quanto antes.'
+    },
     incluido: {
       assunto: 'Pedido de envio incluído na minuta nº {minuta}',
       abertura: 'Informamos que {o_seu_pedido} foi incluído na **minuta de despacho nº {minuta}** e seguirá no malote correspondente.',
@@ -1162,7 +1173,7 @@ function salvarModeloEmail(req) {
   return { ok: true, modelo: m, personalizado: true, padrao: modeloEmailPadrao() };
 }
 
-const TIPOS_EMAIL = ['incluido', 'recusado', 'reaberto', 'comentario', 'lembrete'];
+const TIPOS_EMAIL = ['despachado', 'incluido', 'recusado', 'reaberto', 'comentario', 'lembrete'];
 
 // Pedido de exemplo para a prévia e o e-mail de teste.
 function exemploEmail(tipo, quem, modelo) {
@@ -1172,6 +1183,12 @@ function exemploEmail(tipo, quem, modelo) {
   const p = { criadoEm: agora, atendidoEm: agora, de: 'Mariana - Comercial', para: 'Sheila - Recepção SCS', qtd: 2, conteudo: 'Envelope', obs: 'Entregar em mãos', nome: 'Mariana Souza',
     minuta: tipo === 'incluido' ? '000123' : '', motivo: tipo === 'recusado' ? 'Vai pelo correio nesta semana.' : '' };
   const pedidos = [p];
+  if (tipo === 'despachado') {
+    p.minuta = '000123';
+    pedidos.push({ de: 'Eduardo - Laboratório', para: 'Paulo - Filial Sul', qtd: 1, conteudo: 'Desenvolvimento', obs: '' }, { de: 'Expedição', para: 'Recepção SCS', qtd: 3, conteudo: 'Caixa', obs: 'Frágil' });
+    return { dono: dono, pedidos: pedidos, quem: { nome: (quem && quem.nome) || 'Expedição', email: '' },
+      extra: { data: agora, dataMinuta: agora.split(' ')[0], volumes: '4', origem: 'Matriz', destino: 'Filial Sul', envolvidos: ['Mariana Souza', 'Sheila - Recepção SCS', 'Eduardo Lima', 'Paulo - Filial Sul'] } };
+  }
   if (tipo === 'lembrete') pedidos.push({ criadoEm: agora, de: 'Eduardo - Laboratório', para: 'Paulo - Filial Sul', qtd: 1, conteudo: 'Caixa', obs: '', nome: 'Eduardo Lima' });
   const horas = (modelo && modelo.lembrete && modelo.lembrete.horas) || '24';
   const extra = tipo === 'comentario' ? { autor: 'Mariana Souza', comentario: 'Consegue ir no malote de amanhã cedo? É urgente.' }
@@ -1249,7 +1266,7 @@ function montarEmailPedido(tipo, dono, pedidos, quem, modelo, extra) {
   modelo = modelo || lerModeloEmail().modelo;
   extra = extra || {};
   if (TIPOS_EMAIL.indexOf(tipo) < 0) tipo = 'incluido';
-  const incluido = tipo === 'incluido', recusado = tipo === 'recusado';
+  const incluido = tipo === 'incluido', recusado = tipo === 'recusado', despachado = tipo === 'despachado';
   const t = modelo[tipo];
   const c = modelo.campos;
   const p0 = pedidos[0];
@@ -1259,9 +1276,12 @@ function montarEmailPedido(tipo, dono, pedidos, quem, modelo, extra) {
     minuta: p0.minuta || '', o_seu_pedido: varios ? 'os seus pedidos de envio' : 'o seu pedido de envio',
     atendente: (quem && (quem.nome || quem.usuario)) || p0.atendidoPor || '', data: p0.atendidoEm || '',
     de: p0.de || '', para: p0.para || '', motivo: p0.motivo || 'Não informado',
-    autor: extra.autor || '', comentario: extra.comentario || '', nota: extra.nota || '', horas: extra.horas || (modelo.lembrete && modelo.lembrete.horas) || '', total: extra.total || String(pedidos.length)
+    autor: extra.autor || '', comentario: extra.comentario || '', nota: extra.nota || '', horas: extra.horas || (modelo.lembrete && modelo.lembrete.horas) || '', total: extra.total || String(pedidos.length),
+    total_itens: pedidos.length + (pedidos.length === 1 ? ' item' : ' itens'), volumes: extra.volumes || '', origem: extra.origem || '', destino: extra.destino || '',
+    envolvidos: (extra.envolvidos || []).join(', ')
   };
-  const cor = { incluido: '#16794c', recusado: '#b42318', reaberto: '#6d28d9', comentario: '#2563eb', lembrete: '#b45309' }[tipo];
+  if (despachado) { vars.data = extra.data || vars.data; vars.atendente = (quem && (quem.nome || quem.usuario)) || vars.atendente; }
+  const cor = { despachado: '#0f6e56', incluido: '#16794c', recusado: '#b42318', reaberto: '#6d28d9', comentario: '#2563eb', lembrete: '#b45309' }[tipo];
   const estiloP = 'margin:0 0 14px;color:#374151;font-size:14px;line-height:1.6;';
 
   const assunto = textoParaTexto(t.assunto, vars).replace(/\s+/g, ' ') || 'Pedido de envio';
@@ -1292,6 +1312,26 @@ function montarEmailPedido(tipo, dono, pedidos, quem, modelo, extra) {
       (selo ? '<div style="margin:0 0 8px;"><span style="display:inline-block;padding:3px 10px;border-radius:99px;background:' + cor + ';color:#ffffff;font-size:11px;font-weight:700;letter-spacing:.04em;">' + escHtml(selo) + '</span></div>' : '') +
       '<table role="presentation" cellpadding="0" cellspacing="0">' + ds.map(function (d) { return linha(d[0], d[1]); }).join('') + '</table></td></tr></table>';
   }).join('');
+  // Malote despachado: resumo do malote + tabela com todos os itens + quem foi avisado (no lugar dos cartões).
+  let cartoesDesp = '';
+  if (despachado) {
+    const th = 'padding:8px 10px;text-align:left;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#5b6475;border-bottom:1px solid #e3e7ee;';
+    const td = 'padding:8px 10px;font-size:13px;color:#111827;border-bottom:1px solid #eef1f6;vertical-align:top;';
+    const resumo = [['Minuta nº', vars.minuta], ['Data', extra.dataMinuta || ''], ['Origem', vars.origem], ['Destino', vars.destino], ['Volumes', vars.volumes], ['Itens', String(pedidos.length)]]
+      .filter(function (x) { return x[1] !== '' && x[1] != null; });
+    cartoesDesp =
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e3e7ee;border-radius:10px;margin:0 0 14px;background:#f8fafc;"><tr><td style="padding:14px 16px;">' +
+      (selo ? '<div style="margin:0 0 8px;"><span style="display:inline-block;padding:3px 10px;border-radius:99px;background:' + cor + ';color:#ffffff;font-size:11px;font-weight:700;letter-spacing:.04em;">' + escHtml(selo) + '</span></div>' : '') +
+      '<table role="presentation" cellpadding="0" cellspacing="0">' + resumo.map(function (d) { return linha(d[0], d[1]); }).join('') + '</table></td></tr></table>' +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e3e7ee;border-radius:10px;border-collapse:separate;margin:0 0 14px;overflow:hidden;">' +
+      '<tr style="background:#f8fafc;"><th style="' + th + '">De</th><th style="' + th + '">Para</th><th style="' + th + '">Qtd.</th></tr>' +
+      pedidos.map(function (p) {
+        return '<tr><td style="' + td + '">' + escHtml(p.de || '—') + '</td><td style="' + td + 'font-weight:600;">' + escHtml(p.para || '—') +
+          (p.obs ? '<div style="font-weight:400;color:#5b6475;font-size:12px;margin-top:2px;">' + escHtml(p.obs) + '</div>' : '') + '</td>' +
+          '<td style="' + td + 'white-space:nowrap;">' + escHtml((p.qtd || 1) + ' × ' + (p.conteudo || '')) + '</td></tr>';
+      }).join('') + '</table>' +
+      (vars.envolvidos ? '<p style="margin:0 0 12px;color:#5b6475;font-size:12.5px;line-height:1.5;"><b style="color:#374151;">Avisados neste despacho:</b> ' + escHtml(vars.envolvidos) + '</p>' : '');
+  }
   // Comentário em destaque, logo abaixo do quadro.
   const citacao = tipo === 'comentario' && vars.comentario ? { quem: vars.autor + ' escreveu', txt: vars.comentario, fundo: '#eff6ff' }
     : tipo === 'reaberto' && vars.nota ? { quem: 'Observação de ' + (vars.atendente || 'quem reabriu'), txt: vars.nota, fundo: '#f5f3ff' } : null;
@@ -1327,7 +1367,7 @@ function montarEmailPedido(tipo, dono, pedidos, quem, modelo, extra) {
     '<tr><td style="padding:28px;">' +
     textoParaHtml(modelo.saudacao, vars, 'margin:0 0 14px;color:#111827;font-size:15px;') +
     textoParaHtml(t.abertura, vars, 'margin:0 0 20px;color:#374151;font-size:14px;line-height:1.6;') +
-    cartoes + blocoComentario +
+    (despachado ? cartoesDesp : cartoes) + blocoComentario +
     textoParaHtml(t.linhaAtendente, vars, 'margin:6px 0 0;color:#5b6475;font-size:12.5px;') +
     textoParaHtml(t.fechamento, vars, 'margin:18px 0 0;color:#374151;font-size:14px;line-height:1.6;') +
     (modelo.botao.mostrar && String(modelo.botao.texto).trim()
@@ -1343,9 +1383,13 @@ function montarEmailPedido(tipo, dono, pedidos, quem, modelo, extra) {
     '</table></td></tr></table></body></html>';
 
   const blocosTexto = [textoParaTexto(modelo.saudacao, vars), textoParaTexto(t.abertura, vars)]
-    .concat(pedidos.map(function (p) {
-      return (selo ? '[' + selo + ']\n' : '') + detalhes(p).map(function (d) { return d[0] + ': ' + d[1]; }).join('\n');
-    }))
+    .concat(despachado
+      ? [(selo ? '[' + selo + ']\n' : '') + 'Minuta nº ' + vars.minuta + (vars.destino ? ' · ' + vars.origem + ' → ' + vars.destino : '') + (vars.volumes ? ' · ' + vars.volumes + ' volume(s)' : ''),
+         pedidos.map(function (p) { return '• ' + (p.de || '—') + ' → ' + (p.para || '—') + ' · ' + (p.qtd || 1) + ' × ' + (p.conteudo || '') + (p.obs ? ' (' + p.obs + ')' : ''); }).join('\n'),
+         vars.envolvidos ? 'Avisados neste despacho: ' + vars.envolvidos : '']
+      : pedidos.map(function (p) {
+        return (selo ? '[' + selo + ']\n' : '') + detalhes(p).map(function (d) { return d[0] + ': ' + d[1]; }).join('\n');
+      }))
     .concat(citacao ? [citacao.quem + ':\n' + citacao.txt] : [])
     .concat([textoParaTexto(t.linhaAtendente, vars), textoParaTexto(t.fechamento, vars),
       modelo.botao.mostrar && String(modelo.botao.texto).trim() ? preencherVars(modelo.botao.texto, vars) + ': ' + URL_APP : '',
@@ -1479,7 +1523,7 @@ function gravarEmailFila(aba, e) {
   return e;
 }
 
-const NOMES_TIPO_EMAIL = { incluido: 'Pedido incluído', recusado: 'Pedido recusado', reaberto: 'Pedido reaberto', comentario: 'Comentário no pedido', lembrete: 'Lembrete de pedido parado' };
+const NOMES_TIPO_EMAIL = { despachado: 'Malote despachado', incluido: 'Pedido incluído', recusado: 'Pedido recusado', reaberto: 'Pedido reaberto', comentario: 'Comentário no pedido', lembrete: 'Lembrete de pedido parado' };
 
 function resumoPedidosEmail(pedidos) {
   const p0 = pedidos[0] || {};
@@ -1663,6 +1707,65 @@ function enviarAutomatico(ss, modelo, tipo, pedidos, quem, extra, dono) {
     });
     return true;
   } catch (err) { console.error('Aviso automático não enviado: ' + ((err && err.message) || err)); return false; }
+}
+
+// ============================================================
+//  E-MAIL GERAL "MALOTE DESPACHADO" (versão 3.5)
+//  Ao registrar a minuta, um aviso único com o malote inteiro vai,
+//  automático, para todos os envolvidos: quem pediu os envios, quem
+//  recebe cada item (cadastro de destinatários) e quem está "Sempre em cópia".
+//  Cada pessoa recebe a sua cópia (com o próprio nome na saudação).
+// ============================================================
+function avisarDespacho(ss, m, itens, numeroTexto, quem, novosPedidos, alterada) {
+  const out = { automaticos: 0 };
+  try {
+    const modelo = lerModeloEmail().modelo;
+    if (!modelo.ativo || (modelo.despachado && modelo.despachado.ativo === false)) return out;
+    if (!itens || !itens.length) return out;
+    const usuarios = lerUsuarios(obterAba(ss, ABA_USUARIOS, CAB_USUARIOS));
+    const pessoas = [];
+    const juntar = function (c) {
+      const email = String((c && c.email) || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return; // e-mail vazio ou inválido: pula só essa pessoa
+      if (pessoas.some(function (x) { return x.email === email; })) return;
+      pessoas.push({ usuario: c.usuario || '', nome: c.nome || c.usuario || email, email: email });
+    };
+    // Regravação com pedidos novos: avisa só os envolvidos desses pedidos.
+    const base = alterada ? (novosPedidos || []).map(function (p) { return { pessoa: p.de, ref: p.para }; }) : itens;
+    (novosPedidos || []).forEach(function (p) { juntar(contatoDoUsuario(ss, usuarios, p.usuario, p.nome)); });
+    destinatariosDoPara(ss, base.map(function (i) { return { para: i.ref }; })).forEach(juntar);
+    destinatariosDoPara(ss, base.map(function (i) { return { para: i.pessoa }; })).forEach(juntar);
+    destinatariosEmCopia(ss).forEach(juntar);
+    if (!pessoas.length) return out;
+    const cota = MailApp.getRemainingDailyQuota();
+    const alvo = pessoas.slice(0, Math.max(0, cota));
+    if (alvo.length < pessoas.length) console.warn('Cota de e-mails: ' + (pessoas.length - alvo.length) + ' envolvido(s) sem aviso de despacho.');
+    if (!alvo.length) return out;
+    const linhas = itens.map(function (it) { return { de: it.pessoa || '', para: it.ref || '', qtd: Number(it.qtd) || 1, conteudo: it.conteudo || '', obs: it.obs || '', minuta: numeroTexto }; });
+    const agora = agoraTexto(ss);
+    const extra = { data: agora, dataMinuta: m.data || '', volumes: String(m.volumes || ''), origem: m.remetente || '', destino: m.destinatario || '', envolvidos: pessoas.map(function (x) { return x.nome; }) };
+    const responder = modelo.responderPara || (quem && quem.email) || '';
+    let assunto = '';
+    alvo.forEach(function (d) {
+      const msg = montarEmailPedido('despachado', d, linhas, quem, modelo, extra);
+      const opcoes = { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html };
+      if (responder) opcoes.replyTo = responder;
+      MailApp.sendEmail(d.email, msg.assunto, msg.texto, opcoes);
+      assunto = assunto || msg.assunto;
+      out.automaticos++;
+    });
+    const enviados = alvo.map(function (d) { return d.nome + ' <' + d.email + '>'; }).join(', ');
+    registrarAcao(ss, quem || { usuario: 'sistema', nome: 'Sistema' }, 'Enviou e-mail de malote despachado', 'Minuta nº ' + numeroTexto, 'Para ' + enviados);
+    const fila = lerFilaEmails(ss);
+    gravarEmailFila(fila.aba, {
+      id: 'E' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1296).toString(36).toUpperCase(), criadoEm: agora, tipo: 'despachado', situacao: EM_ENVIADO,
+      geradoPor: quem ? (quem.usuario || 'codigo') : 'sistema', nome: quem ? (quem.nome || quem.usuario || '') : 'Sistema',
+      resumo: 'Malote despachado: minuta nº ' + numeroTexto + ' (' + itens.length + (itens.length === 1 ? ' item' : ' itens') + ')',
+      dados: { pedidos: linhas, extra: extra, automatico: true },
+      enviadoPor: 'Automático', enviadoEm: agora, destinatarios: enviados, assunto: assunto
+    });
+  } catch (err) { console.error('E-mail de malote despachado não enviado: ' + ((err && err.message) || err)); }
+  return out;
 }
 
 // Regra de todos os avisos:
