@@ -132,7 +132,7 @@ const CAB_EMAILS = ['ID', 'Criado em', 'Tipo', 'Situação', 'Gerado por', 'Nome
 const CAB_COMENTARIOS = ['Pedido', 'Data', 'Usuário', 'Nome', 'Comentário'];
 const CAB_AUDITORIA = ['Data', 'Usuário', 'Nome', 'Ação', 'Alvo', 'Detalhes'];
 const MAX_AUDITORIA = 20000; // linhas guardadas na aba Auditoria (as mais antigas saem)
-const VERSAO_SCRIPT = '3.5';
+const VERSAO_SCRIPT = '3.6';
 
 // ---------- Avisos por e-mail ----------
 const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
@@ -297,8 +297,8 @@ function processar(req, ss, ctx) {
       ordenar(abaI, CAB_ITENS.length);
       const inc = marcarPedidosIncluidos(ss, itens, numeroTexto, quem);
       // E-mail geral "Malote despachado": só na primeira gravação da minuta (ou quando entram pedidos novos numa regravação).
-      const desp = (!alterada || inc.novos.length) ? avisarDespacho(ss, m, itens, numeroTexto, quem, inc.novos, alterada) : { automaticos: 0 };
-      inc.automaticos += desp.automaticos;
+      const desp = (!alterada || inc.novos.length) ? avisarDespacho(ss, m, itens, numeroTexto, quem, inc.novos, alterada) : { pendentes: [] };
+      inc.emails = inc.emails.concat(desp.pendentes || []);
       return ({ ok: true, pdf: linkPdf, url: ss.getUrl(), pedidosIncluidos: inc.qtd, emailsPendentes: inc.emails, emailsAutomaticos: inc.automaticos, alterada: alterada, qtdItens: itens.length });
     }
 
@@ -1554,7 +1554,9 @@ function enfileirarEmail(ss, tipo, pedidos, quem, extra, sugeridos, info) {
   e.criadoEm = agora;
   e.geradoPor = quem ? (quem.usuario || 'codigo') : 'sistema';
   e.nome = quem ? (quem.nome || quem.usuario || '') : 'Sistema';
-  e.resumo = (NOMES_TIPO_EMAIL[tipo] || tipo) + ': ' + resumoPedidosEmail(snap);
+  e.resumo = tipo === 'despachado'
+    ? 'Malote despachado: minuta nº ' + ((extra && extra.minuta) || (snap[0] && snap[0].minuta) || '') + ' (' + snap.length + (snap.length === 1 ? ' item' : ' itens') + ')'
+    : (NOMES_TIPO_EMAIL[tipo] || tipo) + ': ' + resumoPedidosEmail(snap);
   e.dados = dados;
   gravarEmailFila(fila.aba, e);
   return e.id;
@@ -1648,6 +1650,7 @@ function enviarEmailFila(ss, quem, req) {
   const responder = modelo.responderPara || (at && at.email) || '';
   const enviados = [];
   let assunto = '';
+  if (e.tipo === 'despachado') e.dados.extra = Object.assign({}, e.dados.extra || {}, { envolvidos: dest.map(function (d) { return d.nome; }) });
   dest.forEach(function (d) {
     const msg = mensagemFila(e, d, modelo);
     const opcoes = { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html };
@@ -1717,7 +1720,7 @@ function enviarAutomatico(ss, modelo, tipo, pedidos, quem, extra, dono) {
 //  Cada pessoa recebe a sua cópia (com o próprio nome na saudação).
 // ============================================================
 function avisarDespacho(ss, m, itens, numeroTexto, quem, novosPedidos, alterada) {
-  const out = { automaticos: 0 };
+  const out = { pendentes: [] };
   try {
     const modelo = lerModeloEmail().modelo;
     if (!modelo.ativo || (modelo.despachado && modelo.despachado.ativo === false)) return out;
@@ -1726,45 +1729,24 @@ function avisarDespacho(ss, m, itens, numeroTexto, quem, novosPedidos, alterada)
     const pessoas = [];
     const juntar = function (c) {
       const email = String((c && c.email) || '').trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return; // e-mail vazio ou inválido: pula só essa pessoa
-      if (pessoas.some(function (x) { return x.email === email; })) return;
-      pessoas.push({ usuario: c.usuario || '', nome: c.nome || c.usuario || email, email: email });
+      const chave = (c && c.usuario) || email;
+      if (!chave) return;
+      if (pessoas.some(function (x) { return (x.usuario && x.usuario === c.usuario) || (email && x.email === email); })) return;
+      pessoas.push({ usuario: (c && c.usuario) || '', nome: (c && (c.nome || c.usuario)) || email, email: email });
     };
-    // Regravação com pedidos novos: avisa só os envolvidos desses pedidos.
+    // Regravação com pedidos novos: sugere só os envolvidos desses pedidos.
     const base = alterada ? (novosPedidos || []).map(function (p) { return { pessoa: p.de, ref: p.para }; }) : itens;
     (novosPedidos || []).forEach(function (p) { juntar(contatoDoUsuario(ss, usuarios, p.usuario, p.nome)); });
     destinatariosDoPara(ss, base.map(function (i) { return { para: i.ref }; })).forEach(juntar);
     destinatariosDoPara(ss, base.map(function (i) { return { para: i.pessoa }; })).forEach(juntar);
-    destinatariosEmCopia(ss).forEach(juntar);
-    if (!pessoas.length) return out;
-    const cota = MailApp.getRemainingDailyQuota();
-    const alvo = pessoas.slice(0, Math.max(0, cota));
-    if (alvo.length < pessoas.length) console.warn('Cota de e-mails: ' + (pessoas.length - alvo.length) + ' envolvido(s) sem aviso de despacho.');
-    if (!alvo.length) return out;
     const linhas = itens.map(function (it) { return { de: it.pessoa || '', para: it.ref || '', qtd: Number(it.qtd) || 1, conteudo: it.conteudo || '', obs: it.obs || '', minuta: numeroTexto }; });
-    const agora = agoraTexto(ss);
-    const extra = { data: agora, dataMinuta: m.data || '', volumes: String(m.volumes || ''), origem: m.remetente || '', destino: m.destinatario || '', envolvidos: pessoas.map(function (x) { return x.nome; }) };
-    const responder = modelo.responderPara || (quem && quem.email) || '';
-    let assunto = '';
-    alvo.forEach(function (d) {
-      const msg = montarEmailPedido('despachado', d, linhas, quem, modelo, extra);
-      const opcoes = { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html };
-      if (responder) opcoes.replyTo = responder;
-      MailApp.sendEmail(d.email, msg.assunto, msg.texto, opcoes);
-      assunto = assunto || msg.assunto;
-      out.automaticos++;
-    });
-    const enviados = alvo.map(function (d) { return d.nome + ' <' + d.email + '>'; }).join(', ');
-    registrarAcao(ss, quem || { usuario: 'sistema', nome: 'Sistema' }, 'Enviou e-mail de malote despachado', 'Minuta nº ' + numeroTexto, 'Para ' + enviados);
-    const fila = lerFilaEmails(ss);
-    gravarEmailFila(fila.aba, {
-      id: 'E' + Date.now().toString(36).toUpperCase() + Math.floor(Math.random() * 1296).toString(36).toUpperCase(), criadoEm: agora, tipo: 'despachado', situacao: EM_ENVIADO,
-      geradoPor: quem ? (quem.usuario || 'codigo') : 'sistema', nome: quem ? (quem.nome || quem.usuario || '') : 'Sistema',
-      resumo: 'Malote despachado: minuta nº ' + numeroTexto + ' (' + itens.length + (itens.length === 1 ? ' item' : ' itens') + ')',
-      dados: { pedidos: linhas, extra: extra, automatico: true },
-      enviadoPor: 'Automático', enviadoEm: agora, destinatarios: enviados, assunto: assunto
-    });
-  } catch (err) { console.error('E-mail de malote despachado não enviado: ' + ((err && err.message) || err)); }
+    const extra = { data: agoraTexto(ss), dataMinuta: m.data || '', volumes: String(m.volumes || ''), origem: m.remetente || '', destino: m.destinatario || '',
+      envolvidos: pessoas.map(function (x) { return x.nome; }), minuta: numeroTexto };
+    // Fica PENDENTE: quem despachou confere e escolhe quem recebe antes de enviar
+    // (todos os envolvidos e quem está "Sempre em cópia" já aparecem marcados).
+    const id = enfileirarEmail(ss, 'despachado', linhas, quem, extra, pessoas, {});
+    if (id) out.pendentes.push(id);
+  } catch (err) { console.error('E-mail de malote despachado não gerado: ' + ((err && err.message) || err)); }
   return out;
 }
 

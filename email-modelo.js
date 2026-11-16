@@ -64,7 +64,7 @@
         <div class="seg em-tabs" role="tablist"><button type="button" class="active" data-em-tipo="despachado">Despachado</button><button type="button" data-em-tipo="recusado">Recusado</button><button type="button" data-em-tipo="reaberto">Reaberto</button><button type="button" data-em-tipo="comentario">Comentário</button><button type="button" data-em-tipo="lembrete">Lembrete</button></div>
         <p class="hint em-tipo-desc" id="emTipoDesc"></p>
 
-        <div class="chips-check" data-tipo="despachado"><label><input type="checkbox" data-k="despachado.ativo" /><span>Enviar o aviso de malote despachado para todos os envolvidos</span></label></div>
+        <div class="chips-check" data-tipo="despachado"><label><input type="checkbox" data-k="despachado.ativo" /><span>Gerar o aviso de malote despachado (conferido antes de enviar)</span></label></div>
         <div class="em-lembrete" data-tipo="lembrete">
           <span class="sub-title">Lembrete de pedido parado</span>
           <div class="chips-check"><label><input type="checkbox" data-k="lembrete.ativo" /><span>Enviar lembrete de pedido parado para quem pediu</span></label></div>
@@ -169,7 +169,7 @@
     modal.querySelectorAll('[data-tipo]').forEach((el) => (el.hidden = el.dataset.tipo !== t));
     $('emTipoNome').textContent = TIPOS[t];
     $('emTipoDesc').textContent = {
-      despachado: 'Vai automático, uma vez, quando a minuta é registrada: para quem pediu os envios, para quem recebe cada item (cadastro de destinatários) e para quem está "Sempre em cópia". O e-mail mostra o malote inteiro e quem foi avisado.',
+      despachado: 'Quando a minuta é registrada, abre a conferência com todos os envolvidos já marcados (quem pediu os envios, quem recebe cada item e quem está "Sempre em cópia"). Só sai depois que você conferir e clicar em Enviar. O e-mail mostra o malote inteiro e quem foi avisado.',
       recusado: 'Vai para quem fez o pedido quando ele é recusado, com o motivo.',
       reaberto: 'Vai para quem fez o pedido quando um pedido recusado (ou cancelado) volta para a fila, para um envio posterior.',
       comentario: 'Quando quem monta o malote comenta, vai automático para quem pediu. Quando quem pediu comenta, o e-mail fica para conferir antes de enviar.',
@@ -205,7 +205,7 @@
     st.className = 'perm-chip ' + (r.modelo.ativo ? 'ok' : 'off');
     st.textContent = (r.modelo.ativo ? 'Ligado' : 'Desligado') + ' · ' + (personalizado ? 'modelo personalizado' : 'modelo padrão');
     $('emResumo').textContent = r.modelo.ativo
-      ? `Aviso geral de malote despachado${r.modelo.despachado?.ativo === false ? ' (desligado)' : ''} para todos os envolvidos, avisos de pedido recusado, reaberto e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Quem pediu recebe automático; os outros destinatários só depois de conferido (tela Destinatários). Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
+      ? `Aviso geral de malote despachado${r.modelo.despachado?.ativo === false ? ' (desligado)' : ''} para todos os envolvidos (conferido antes de enviar), avisos de pedido recusado, reaberto e de comentários${r.modelo.lembrete?.ativo ? `, e lembrete de pedido parado há mais de ${r.modelo.lembrete.horas} h` : ''}. Quem pediu recebe automático; os outros destinatários só depois de conferido (tela Destinatários). Você pode mudar o texto, a assinatura e o que aparece no e-mail.`
       : 'Os avisos por e-mail estão desligados. Abra o modelo para ligar de novo.';
   }
   const AUTH = window.AUTH;
