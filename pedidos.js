@@ -39,7 +39,7 @@
           <p class="hint ped-hint">Diga de quem para quem vai o envio. Quem monta o malote recebe o aviso e inclui o seu pedido.</p>
           <div class="ped-email" id="pedEmailAviso" hidden><span data-ico="mail"></span><span id="pedEmailTxt"></span> <button class="lg-link ped-email-btn" id="pedEmailBtn" type="button"></button></div>
           <div class="fgrid">
-            <label class="field span2"><span>Quem está enviando</span><input id="pedDe" list="pessoasList" maxlength="80" autocomplete="off" title="Nome e setor de quem está mandando o envio (ex.: Mariana - Expedição). Comece a digitar para ver os nomes já usados." /></label>
+            <label class="field span2"><span>Quem está enviando</span><input id="pedDe" class="ped-de-fixo" maxlength="80" autocomplete="off" readonly tabindex="-1" aria-readonly="true" title="Sempre o usuário que está logado. É por ele que o app sabe para qual e-mail mandar os avisos deste pedido." /></label>
             <label class="field span2"><span>Para quem vai</span><input id="pedPara" class="pp-campo" maxlength="80" autocomplete="off" placeholder="Escolher destinatário" aria-haspopup="dialog" title="Só quem está no cadastro de destinatários. Clique para buscar e escolher." /><datalist id="pedParaList"></datalist></label>
             <div class="ped-bloq span2" id="pedParaBloq" role="alert" hidden><span data-ico="shield"></span><div><b id="pedParaBloqTit">Destinatário não cadastrado</b><small id="pedParaBloqTxt"></small></div><button class="ghost sm" id="pedParaCadastrar" type="button" hidden>Cadastrar</button></div>
             <label class="field"><span>Quantidade</span><input id="pedQtd" type="number" min="1" max="999" value="1" title="Quantos volumes ou itens vão neste envio (de 1 a 999)" /></label>
@@ -277,10 +277,23 @@
     $('pedEmailBtn').textContent = u.email ? 'Alterar' : 'Cadastrar e-mail';
   }
   $('pedEmailBtn')?.addEventListener('click', () => { $('sbUser')?.click(); setTimeout(() => $('contaEmail')?.focus(), 120); });
-  window.addEventListener('gm-usuario-atualizado', renderEmail);
+  window.addEventListener('gm-usuario-atualizado', () => { renderEmail(); renderRemetente(); });
+
+  // "Quem está enviando" fica travado no usuário logado: liga o pedido ao e-mail do cadastro dele.
+  // Só sem login (modo antigo, só com o código de acesso) o campo continua livre.
+  function renderRemetente() {
+    const campo = $('pedDe'); if (!campo) return;
+    const u = window.AUTH?.usuario, logado = !!u && !window.AUTH?.legado;
+    campo.readOnly = logado;
+    campo.tabIndex = logado ? -1 : 0;
+    campo.classList.toggle('ped-de-fixo', logado);
+    if (logado) { campo.removeAttribute('list'); campo.value = u.nome || u.usuario || ''; }
+    else campo.setAttribute('list', 'pessoasList');
+  }
 
   function render() {
     renderEmail();
+    renderRemetente();
     carregarDestinos();
     const fila = aguardando(), dentro = naMinuta();
     const feitos = pedidos.filter((p) => p.situacao !== 'AGUARDANDO');
@@ -458,6 +471,7 @@
   });
 
   async function enviarPedido() {
+    renderRemetente();
     const pedido = { de: $('pedDe').value.trim(), para: $('pedPara').value.trim(), qtd: Number($('pedQtd').value) || 1, conteudo: $('pedConteudo').value, obs: $('pedObs').value.trim() };
     if (!pedido.de) { window.toast?.('Informe quem está enviando.', true); return $('pedDe').focus(); }
     if (!pedido.para) { window.toast?.('Informe para quem vai o envio.', true); return $('pedPara').focus(); }

@@ -143,7 +143,7 @@
 
     const atalhos = [];
     if (pode('minutas.criar')) atalhos.push(['nova', 'filePlus', 'Nova minuta', 'Montar um malote', '']);
-    if (pode('pedidos.criar')) atalhos.push(['pedidos', 'send', 'Pedir um envio', 'Para quem monta o malote', 'pedDe']);
+    if (pode('pedidos.criar')) atalhos.push(['pedidos', 'send', 'Pedir um envio', 'Para quem monta o malote', 'pedPara']);
     if (podeTela('frete')) atalhos.push(['frete', 'mail', 'Frete cortesia', 'Etiqueta e malote', '']);
     if (pode('historico.ver')) atalhos.push(['historico', 'search', 'Buscar minuta', 'No histórico', 'busca']);
     $('inAtalhos').innerHTML = atalhos.map(([go, ic, t, s, foco]) => `<button type="button" class="in-atalho" data-go="${go}"${foco ? ` data-foco="${foco}"` : ''}><span class="in-atalho-ico">${ico(ic)}</span><span><b>${t}</b><small>${s}</small></span>${ico('chevronRight', 'in-seta')}</button>`).join('');

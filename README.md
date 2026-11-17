@@ -13,6 +13,14 @@ O mesmo código roda de dois jeitos:
 | PDF | Imprimir › **Salvar como PDF** | Gerado e aberto automaticamente, com cópia no Drive |
 | Cópia no `registro_itens.csv` | — | Sim, quando a pasta estiver acessível |
 
+## Novidades da v3.9
+
+- **E-mails saem de `amostra@quatrok.com.br`**: todos os avisos (malote despachado, pedidos incluídos/recusados/reabertos, comentários, lembretes e testes) usam a conta definida em `EMAIL_CONTA_ENVIO` no `GoogleSheets_Script.gs`. O ideal é publicar o script com essa conta. Se o script for publicado por outra conta, `amostra@quatrok.com.br` precisa estar em *Gmail › Configurações › Contas › Enviar e-mail como* dessa conta (o Google pede para autorizar o Gmail de novo: rode `testarEmail` no editor). Sem isso, o envio é recusado com uma mensagem explicando o que fazer.
+- **E-mail obrigatório no usuário**: primeiro acesso, cadastro pela tela de login, *Usuários* (criar/alterar/aprovar) e *Minha conta* exigem um e-mail válido, que não pode repetir entre usuários. Usuário antigo sem e-mail precisa ter um informado na próxima alteração.
+- **Envio › Quem está enviando** fica travado no usuário logado (o script do Google também grava sempre o nome de quem está logado). Assim o pedido fica ligado ao e-mail do cadastro dele.
+- **Cabeçalho da minuta** não quebra mais: o status do rascunho foi para a linha do título e, quando falta espaço, os botões secundários viram só ícone.
+- **Precisa do `GoogleSheets_Script.gs` 3.9 publicado no Apps Script.**
+
 ## Novidades da v3.5
 
 - **Início**: painel que abre primeiro, com minutas do dia e do mês, volumes, pedidos aguardando, atalhos e últimas minutas. Cada perfil só vê o que pode usar. Atalho **Alt+0**.
