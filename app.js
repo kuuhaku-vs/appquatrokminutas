@@ -975,7 +975,7 @@ const localDB = {
 
 function setDraftStatus(text, cls='') {
   const el = $('draftStatus'); if (!el) return;
-  el.textContent = text; el.className = 'draft-status ' + cls;
+  el.textContent = text; el.title = text.replace(/^●\s*/, ''); el.className = 'draft-status ' + cls;
 }
 function draftSnapshot() {
   return {
@@ -1005,17 +1005,17 @@ async function salvarRascunho() {
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(snap));
     await localDB.put('drafts', { key: 'current', ...snap });
-    setDraftStatus('● Rascunho salvo automaticamente', 'saved');
+    setDraftStatus('● Rascunho salvo', 'saved');
   } catch { setDraftStatus('● Rascunho local', ''); }
 }
 function salvarRascunhoDebounced() {
-  setDraftStatus('● Salvando rascunho...', 'saving');
+  setDraftStatus('● Salvando…', 'saving');
   clearTimeout(draftTimer); draftTimer = setTimeout(salvarRascunho, 500);
 }
 async function limparRascunho() {
   draftDirty = false;
   try { localStorage.removeItem(DRAFT_KEY); await localDB.del('drafts', 'current'); } catch {}
-  setDraftStatus('● Rascunho salvo automaticamente', 'saved');
+  setDraftStatus('● Rascunho salvo', 'saved');
 }
 async function recuperarRascunho() {
   let snap = null;

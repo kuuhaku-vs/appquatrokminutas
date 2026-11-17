@@ -17,6 +17,8 @@
   function lerCfg() {
     const c = lsGet(K_CFG, {}) || {};
     const sheets = { ...(c.sheets || {}) };
+    // URL antiga salva no aparelho → troca pela atual do config.js (mudança de conta do script, v3.9).
+    if (sheets.url && (CFG.urlsAntigas || []).includes(String(sheets.url).trim())) sheets.url = '';
     if (!sheets.url) sheets.url = String(CFG.scriptUrl || '').trim();
     sheets.banco = 'sheets'; sheets.ativo = true; sheets.copiaCsv = false; sheets.enviarPdf = false;
     return { digitos: CFG.digitos || 6, ...c, sheets };

@@ -728,3 +728,53 @@ html.modal-aberto, html.modal-aberto body, html.modal-aberto .content { overflow
   .det-oque, .det-obs { grid-column: 2; }
   #histBody tr[data-num]:hover td { background: none; }
 }
+
+/* =========================================================
+   v3.9 · CABEÇALHO DA MINUTA SEM QUEBRA
+   O status do rascunho mudava de tamanho ("Salvando rascunho..." /
+   "Rascunho salvo automaticamente") e o sino de notificações entra e sai:
+   isso empurrava todos os botões para uma segunda linha e de volta.
+   Agora o status fica na linha do título (não ocupa espaço ao lado dos
+   botões), a linha não quebra e, quando falta espaço, os botões
+   secundários viram só ícone (o nome continua na dica do mouse).
+========================================================= */
+.doc-eyebrow { display: flex; align-items: baseline; gap: 10px; min-width: 0; margin-bottom: 4px; }
+.doc-eyebrow .eyebrow { margin-bottom: 0; flex: 0 0 auto; }
+.doc-eyebrow .draft-status { display: block; min-width: 0; font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+@media (min-width: 761px) {
+  #v-nova .vh-sticky { flex-wrap: nowrap; container-type: inline-size; container-name: cabminuta; }
+  #v-nova .doc-id { flex: 1 1 auto; min-width: 0; }
+  #v-nova .doc-line { flex-wrap: nowrap; }
+  #v-nova .doc-num, #v-nova .date-chip { flex: 0 0 auto; }
+  #v-nova .vh-actions { flex: 0 0 auto; flex-wrap: nowrap; }
+  #v-nova .vh-actions > * { flex-shrink: 0; }
+  #v-nova .vh-actions button { white-space: nowrap; }
+}
+/* Um pouco apertado: "Nova" vira só ícone. */
+@container cabminuta (max-width: 1110px) {
+  #v-nova .vh-actions #btnNova span { display: none; }
+  #v-nova .vh-actions #btnNova { width: 36px; padding: 0; justify-content: center; }
+}
+/* Apertado: todos os botões secundários só com ícone. */
+@container cabminuta (max-width: 1060px) {
+  #v-nova .vh-actions .ghost span { display: none; }
+  #v-nova .vh-actions .ghost { width: 36px; padding: 0; justify-content: center; }
+}
+/* Tablet: os botões ficam numa linha própria, alinhados à direita. */
+@media (min-width: 761px) and (max-width: 900px) {
+  #v-nova .vh-sticky { flex-wrap: wrap; row-gap: 10px; }
+  #v-nova .vh-actions { width: 100%; justify-content: flex-end; }
+}
+@supports not (container-type: inline-size) {
+  @media (min-width: 761px) and (max-width: 1420px) {
+    #v-nova .vh-actions .ghost span { display: none; }
+    #v-nova .vh-actions .ghost { width: 36px; padding: 0; justify-content: center; }
+  }
+}
+/* Celular: os botões cabem numa linha só (antes o "Avisar" sobrava sozinho numa segunda linha). */
+@media (max-width: 760px) {
+  #v-nova .vh-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  #v-nova .vh-actions .ghost { flex: 1 1 0; min-width: 0; }
+  #v-nova .vh-actions .notif-btn { flex: 0 0 44px; height: 58px; }
+  #v-nova .vh-actions .primary { flex: 1 0 100%; }
+}

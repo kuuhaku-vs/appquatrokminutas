@@ -71,7 +71,10 @@
  *     O modelo fica guardado neste script (Propriedades do script) e vale
  *     para todos os aparelhos. Os valores EMAIL_* abaixo são só o padrão
  *     usado enquanto ninguém salvou um modelo (ou em "Restaurar padrão").
- *   • O e-mail sai da conta Google dona deste script.
+ *   • O e-mail sai da conta EMAIL_CONTA_ENVIO (amostra@quatrok.com.br, versão 3.9).
+ *     O ideal é publicar o script com essa conta. Publicado por outra conta, o
+ *     endereço precisa estar em "Enviar e-mail como" no Gmail dela, e o Google
+ *     pede para autorizar o Gmail de novo (rode testarEmail no editor).
  *   • AUTORIZAR (uma vez, depois de colar esta versão): no editor do Apps
  *     Script, escolha a função testarEmail na barra de cima e clique em
  *     Executar. Autorize "Enviar e-mail como você". Chegam dois e-mails de
@@ -136,11 +139,17 @@ const CAB_EMAILS = ['ID', 'Criado em', 'Tipo', 'Situação', 'Gerado por', 'Nome
 const CAB_COMENTARIOS = ['Pedido', 'Data', 'Usuário', 'Nome', 'Comentário'];
 const CAB_AUDITORIA = ['Data', 'Usuário', 'Nome', 'Ação', 'Alvo', 'Detalhes'];
 const MAX_AUDITORIA = 20000; // linhas guardadas na aba Auditoria (as mais antigas saem)
-const VERSAO_SCRIPT = '3.8';
+const VERSAO_SCRIPT = '3.9';
 
 // ---------- Avisos por e-mail ----------
 const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
 const EMAIL_NOME_REMETENTE = 'Expedição · Grupo Quatro K'; // nome que aparece como remetente
+// Conta que ENVIA todos os avisos (despacho, pedidos, comentários, lembretes, testes) (3.9).
+// Se o script for publicado por esta mesma conta, sai direto dela. Se for publicado por outra conta,
+// este endereço precisa estar em Gmail › Configurações › Contas › "Enviar e-mail como" da conta dona
+// do script (alias verificado); senão o envio é recusado com uma mensagem explicando o que fazer.
+// Vazio = sai da conta dona do script (como nas versões anteriores).
+const EMAIL_CONTA_ENVIO = 'amostra@quatrok.com.br';
 const EMAIL_RESPONDER_PARA = '';                           // e-mail para respostas; vazio = e-mail de quem atendeu o pedido (se tiver) ou a conta do script
 const EMAIL_ASSINATURA = {
   nome: 'Equipe de Expedição',
@@ -626,7 +635,7 @@ function primeiroAcesso(ss, abaU, usuarios, req) {
   limparFalhas('primeiro');
   const agora = agoraTexto(ss);
   const u = gravarUsuario(abaU, {
-    usuario: validarNomeUsuario(req.usuario), nome: String(req.nome || '').trim() || 'Administrador', perfil: 'admin', permissoes: PERMISSOES.slice(), email: validarEmail(req.email),
+    usuario: validarNomeUsuario(req.usuario), nome: String(req.nome || '').trim() || 'Administrador', perfil: 'admin', permissoes: PERMISSOES.slice(), email: validarEmailUsuario(req.email, usuarios, ''),
     ativo: true, hash: protegerSenha(validarSenhaNova(req.senha)), sv: 1, criadoEm: agora, ultimoAcesso: agora
   });
   return { ok: true, usuario: publico(u), sessao: criarSessao(u, !!req.lembrar) };
@@ -658,11 +667,12 @@ function pedirCadastro(ss, abaU, usuarios, req) {
   const nome = validarNomeUsuario(req.usuario);
   if (usuarios.some(function (x) { return x.usuario === nome; })) throw erroAcesso('existe', 'Já existe um usuário "' + nome + '". Escolha outro.');
   const senha = validarSenhaNova(req.senha);
+  const emailNovo = validarEmailUsuario(req.email, usuarios, nome);
   cache.put('cadastros', String(feitos + 1), 3600);
   const agora = agoraTexto(ss);
   const u = gravarUsuario(abaU, {
     usuario: nome, nome: String(req.nome || '').trim().slice(0, 60) || nome, perfil: 'consulta', permissoes: permissoesEfetivas('consulta'),
-    email: validarEmail(req.email), ativo: true, pendente: false, hash: protegerSenha(senha), sv: 1, criadoEm: agora, ultimoAcesso: agora
+    email: emailNovo, ativo: true, pendente: false, hash: protegerSenha(senha), sv: 1, criadoEm: agora, ultimoAcesso: agora
   });
   return { ok: true, usuario: publico(u), sessao: criarSessao(u, !!req.lembrar) };
 }
@@ -685,10 +695,20 @@ function validarEmail(v) {
   return email;
 }
 
+// E-mail de usuário (3.9): obrigatório e sem repetir entre usuários. É ele que liga
+// o usuário logado aos avisos por e-mail (quem está enviando, quem pediu...).
+function validarEmailUsuario(v, usuarios, login) {
+  const email = validarEmail(v);
+  if (!email) throw erroAcesso('email', 'Informe o e-mail. Ele é obrigatório para todo usuário.');
+  const outro = (usuarios || []).filter(function (x) { return x.email && String(x.email).toLowerCase() === email && x.usuario !== login; })[0];
+  if (outro) throw erroAcesso('email', 'O e-mail ' + email + ' já é do usuário @' + outro.usuario + '.');
+  return email;
+}
+
 // A própria pessoa informa o e-mail onde quer receber os avisos dos pedidos de envio.
 function trocarEmail(abaU, quem, req) {
   if (quem.legado) throw erroAcesso('login', 'Entre com usuário e senha primeiro.');
-  quem.email = validarEmail(req.email);
+  quem.email = validarEmailUsuario(req.email, lerUsuarios(abaU), quem.usuario);
   gravarUsuario(abaU, quem);
   return { ok: true, usuario: publico(quem) };
 }
@@ -709,7 +729,8 @@ function salvarUsuario(ss, abaU, usuarios, quem, req) {
 
   const eraAtivo = u.ativo;
   u.nome = String(d.nome == null ? (u.nome || '') : d.nome).trim().slice(0, 60) || nome;
-  if (d.email !== undefined) u.email = validarEmail(d.email);
+  // E-mail obrigatório ao criar; ao alterar, não pode ficar vazio (usuário antigo sem e-mail precisa informar).
+  u.email = validarEmailUsuario(d.email !== undefined ? d.email : u.email, usuarios, u.usuario);
   u.perfil = PERFIS.hasOwnProperty(String(d.perfil)) ? String(d.perfil) : (u.perfil || 'consulta');
   u.permissoes = permissoesEfetivas(u.perfil, d.permissoes || []);
   u.ativo = d.ativo !== false;
@@ -774,7 +795,8 @@ function pedidoPublico(p, comentarios) {
 
 function criarPedido(ss, quem, req) {
   const d = req.pedido || {};
-  const de = textoLimpo(d.de, 80), para = textoLimpo(d.para, 80);
+  // 3.9: com login, "Quem está enviando" é sempre o usuário logado (liga o pedido ao e-mail dele).
+  const de = (quem && !quem.legado && quem.usuario) ? textoLimpo(quem.nome || quem.usuario, 80) : textoLimpo(d.de, 80), para = textoLimpo(d.para, 80);
   if (!de) throw erroAcesso('pedido', 'Informe quem está enviando.');
   if (!para) throw erroAcesso('pedido', 'Informe para quem vai o envio.');
   // "Para quem vai": só quem está no cadastro de destinatários (ativo).
@@ -1246,7 +1268,7 @@ function testeEmail(req, quem) {
   tipos.forEach(function (tipo) {
     const ex = exemploEmail(tipo, quem, modelo);
     const msg = montarEmailPedido(tipo, ex.dono, ex.pedidos, ex.quem, modelo, ex.extra);
-    MailApp.sendEmail(para, '[TESTE] ' + msg.assunto, msg.texto, { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html });
+    enviarEmailConta(para, '[TESTE] ' + msg.assunto, msg.texto, { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html });
   });
   return { ok: true, para: para, enviados: tipos.length, cota: MailApp.getRemainingDailyQuota() };
 }
@@ -1688,7 +1710,7 @@ function enviarEmailFila(ss, quem, req) {
     const msg = mensagemFila(e, d, modelo);
     const opcoes = { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html };
     if (responder) opcoes.replyTo = responder;
-    MailApp.sendEmail(d.email, msg.assunto, msg.texto, opcoes);
+    enviarEmailConta(d.email, msg.assunto, msg.texto, opcoes);
     enviados.push(d.nome + ' <' + d.email + '>');
     assunto = assunto || msg.assunto;
   });
@@ -1731,7 +1753,7 @@ function enviarAutomatico(ss, modelo, tipo, pedidos, quem, extra, dono) {
     const opcoes = { name: modelo.remetente || EMAIL_NOME_REMETENTE, htmlBody: msg.html };
     const responder = modelo.responderPara || (quem && quem.email) || '';
     if (responder) opcoes.replyTo = responder;
-    MailApp.sendEmail(dono.email, msg.assunto, msg.texto, opcoes);
+    enviarEmailConta(dono.email, msg.assunto, msg.texto, opcoes);
     registrarAcao(ss, quem || { usuario: 'sistema', nome: 'Sistema' }, 'Enviou e-mail automático', msg.assunto, 'Para ' + dono.nome + ' <' + dono.email + '>');
     const fila = lerFilaEmails(ss);
     const snap = pedidos.map(function (p) { return { id: p.id, criadoEm: p.criadoEm, usuario: p.usuario, nome: p.nome, de: p.de, para: p.para, qtd: p.qtd, conteudo: p.conteudo, obs: p.obs, minuta: p.minuta || '', atendidoPor: p.atendidoPor || '', atendidoEm: p.atendidoEm || '', motivo: p.motivo || '' }; });
@@ -1783,8 +1805,25 @@ function avisarDespacho(ss, m, itens, numeroTexto, quem, novosPedidos, alterada)
   return out;
 }
 
-// Conta Google que envia os e-mails (quem publicou o App da Web com "Executar como: Eu").
-function contaQueEnvia() { try { return Session.getEffectiveUser().getEmail() || ''; } catch (e) { return ''; } }
+// Conta Google dona do script (quem publicou o App da Web com "Executar como: Eu").
+function contaDonaScript() { try { return String(Session.getEffectiveUser().getEmail() || '').toLowerCase(); } catch (e) { return ''; } }
+
+// Conta que aparece como remetente dos e-mails (EMAIL_CONTA_ENVIO ou, vazio, a dona do script).
+function contaQueEnvia() { return String(EMAIL_CONTA_ENVIO || '').trim().toLowerCase() || contaDonaScript(); }
+
+// Todos os e-mails do Gerador passam por aqui, para saírem da conta EMAIL_CONTA_ENVIO.
+function enviarEmailConta(para, assunto, texto, opcoes) {
+  const de = String(EMAIL_CONTA_ENVIO || '').trim().toLowerCase();
+  const dono = contaDonaScript();
+  if (!de || de === dono) { MailApp.sendEmail(para, assunto, texto, opcoes || {}); return; }
+  let apelidos = [];
+  try { apelidos = GmailApp.getAliases().map(function (a) { return String(a).toLowerCase(); }); } catch (e) { console.warn('Não foi possível ler os aliases do Gmail: ' + e); }
+  if (apelidos.indexOf(de) < 0)
+    throw erroAcesso('email', 'Os e-mails devem sair de ' + de + ', mas o script está publicado pela conta ' + (dono || 'desconhecida') +
+      ', que não pode enviar como esse endereço. Publique o script com a conta ' + de + ' ou adicione ' + de +
+      ' em Gmail › Configurações › Contas › "Enviar e-mail como" da conta ' + (dono || 'dona do script') + '.');
+  GmailApp.sendEmail(para, assunto, texto, Object.assign({}, opcoes || {}, { from: de }));
+}
 
 // Botão "Enviar aviso de despacho": monta o aviso de uma minuta já registrada e deixa PENDENTE para conferir.
 // Se já houver um aviso pendente dessa minuta, devolve o mesmo (não duplica).
