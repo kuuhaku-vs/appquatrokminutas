@@ -627,7 +627,9 @@ body[data-screen="config"] .sb-gear, body[data-screen="config"] .m-gear { backgr
 /* =========================================================
    FRETE CORTESIA DENTRO DA NOVA MINUTA (abas no topo)
 ========================================================= */
-.nova-abas { display: inline-flex; gap: 4px; padding: 4px; margin: 0 0 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); max-width: 100%; }
+.nova-abas { display: inline-flex; gap: 4px; padding: 4px; margin: 0 0 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); max-width: 100%;
+  /* 3.9: mesmo tamanho nas duas telas (na Minuta a tela é flex em coluna e esticava o card na largura toda). */
+  width: fit-content; align-self: flex-start; flex: 0 0 auto; }
 .nova-aba { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--text-2); font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .15s, color .15s; }
 .nova-aba .ico { width: 16px; height: 16px; }
 .nova-aba:hover { color: var(--text); background: var(--surface-3); }
