@@ -19,6 +19,7 @@ O mesmo código roda de dois jeitos:
 - **E-mail obrigatório no usuário**: primeiro acesso, cadastro pela tela de login, *Usuários* (criar/alterar/aprovar) e *Minha conta* exigem um e-mail válido, que não pode repetir entre usuários. Usuário antigo sem e-mail precisa ter um informado na próxima alteração.
 - **Envio › Quem está enviando** fica travado no usuário logado (o script do Google também grava sempre o nome de quem está logado). Assim o pedido fica ligado ao e-mail do cadastro dele.
 - **Cabeçalho da minuta** não quebra mais: o status do rascunho foi para a linha do título e, quando falta espaço, os botões secundários viram só ícone.
+- **Script na conta amostra@quatrok.com.br**: o App da Web agora é o projeto *Gerador de Minutas 4K (amostra)*, na conta amostra@, apontando para a planilha por `ID_PLANILHA`. A URL nova está no `config.js`; aparelhos com a URL antiga salva passam sozinhos para a nova (é preciso entrar de novo uma vez). No programa do Windows, cole a URL nova em Configurações.
 - **Precisa do `GoogleSheets_Script.gs` 3.9 publicado no Apps Script.**
 
 ## Novidades da v3.5
