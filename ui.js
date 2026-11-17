@@ -127,10 +127,19 @@
       status.dataset.state = 'bad'; txt.textContent = 'Planilha inacessível'; sub.textContent = 'Verifique em Configurações';
     }
   }
-  window.verificarPlanilhaUI = verificarPlanilha;
-  setTimeout(verificarPlanilha, 600);
-  setInterval(verificarPlanilha, 60000);
-  window.addEventListener('focus', verificarPlanilha);
+  // 4.0: só confere depois de entrar (antes do login a consulta era recusada e marcava "inacessível"),
+  // e no máximo uma vez a cada 30 s quando a janela volta ao foco.
+  let ultimaVerificacao = 0, entrou = !window.api?.auth;
+  async function verificarPlanilhaQuandoPuder(forcar) {
+    if (!entrou || (!forcar && Date.now() - ultimaVerificacao < 30000)) return;
+    ultimaVerificacao = Date.now();
+    await verificarPlanilha();
+  }
+  window.verificarPlanilhaUI = () => verificarPlanilhaQuandoPuder(true);
+  window.addEventListener('gm-entrou', () => { entrou = true; });
+  if (entrou) setTimeout(() => verificarPlanilhaQuandoPuder(true), 600);
+  setInterval(() => verificarPlanilhaQuandoPuder(true), 60000);
+  window.addEventListener('focus', () => verificarPlanilhaQuandoPuder(false));
 })();
 
 /* Dica ao parar o mouse sobre um campo (v2.8).

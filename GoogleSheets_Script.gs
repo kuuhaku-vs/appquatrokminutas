@@ -139,7 +139,7 @@ const CAB_EMAILS = ['ID', 'Criado em', 'Tipo', 'Situação', 'Gerado por', 'Nome
 const CAB_COMENTARIOS = ['Pedido', 'Data', 'Usuário', 'Nome', 'Comentário'];
 const CAB_AUDITORIA = ['Data', 'Usuário', 'Nome', 'Ação', 'Alvo', 'Detalhes'];
 const MAX_AUDITORIA = 20000; // linhas guardadas na aba Auditoria (as mais antigas saem)
-const VERSAO_SCRIPT = '3.9';
+const VERSAO_SCRIPT = '4.0';
 
 // ---------- Avisos por e-mail ----------
 const EMAIL_ATIVO = true;                                  // false desliga todos os avisos
@@ -181,17 +181,30 @@ const MAX_CADASTROS_HORA = 20;    // limite de cadastros pela tela de login por 
 const MAX_TENTATIVAS = 5;         // depois disso o login espera 5 minutos
 const CAB_ITENS = ['Minuta', 'Data', 'Item', 'Rem. / Setor', 'Dest. / Setor', 'Qtd.', 'Conteúdo', 'Obs.'];
 
+// 4.0: consultas não entram na fila do bloqueio. Antes, abrir o app disparava várias consultas
+// ao mesmo tempo e cada uma esperava a anterior terminar. Só o que grava espera o bloqueio.
+const ACOES_LEITURA = {
+  'auth.estado': 1, 'auth.eu': 1, 'pedidos.listar': 1, 'usuarios.auditoria': 1, 'usuarios.listar': 1,
+  'usuarios.emailmodelo': 1, 'usuarios.emailprevia': 1, 'destinatarios.listar': 1, 'emails.listar': 1,
+  'emails.previa': 1, 'teste': 1, 'proximo': 1, 'listar': 1
+};
+
 function doPost(e) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  let req = {}, ss = null;
+  let req = {}, ss = null, lock = null;
   const ctx = { quem: null };
+  try { req = JSON.parse((e && e.postData && e.postData.contents) || '{}') || {}; } catch (err) { req = {}; }
+  const leitura = ACOES_LEITURA[req.acao] === 1;
   try {
-    req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (!leitura) { lock = LockService.getScriptLock(); lock.waitLock(30000); }
     ss = planilhaPrincipal();
     const res = processar(req, ss, ctx);
-    if (res && res.ok) auditar(ss, ctx.quem, req, res);
-    verificarPedidosParadosSePreciso(ss); // lembrete de pedido parado (no máximo a cada 30 min)
+    if (res && res.ok && !leitura) auditar(ss, ctx.quem, req, res);
+    // Lembrete de pedido parado (no máximo a cada 30 min). Numa consulta, só roda se o bloqueio estiver livre.
+    if (!leitura) verificarPedidosParadosSePreciso(ss);
+    else if (lembreteVencido()) {
+      const l2 = LockService.getScriptLock();
+      if (l2.tryLock(0)) { try { verificarPedidosParadosSePreciso(ss); } finally { l2.releaseLock(); } }
+    }
     return resposta(res);
   } catch (err) {
     if (ss && req.acao === 'auth.login' && err && err.codigo === 'credenciais') {
@@ -199,7 +212,7 @@ function doPost(e) {
     }
     return resposta({ ok: false, codigo: (err && err.codigo) || undefined, error: String((err && err.message) || err) });
   } finally {
-    lock.releaseLock();
+    if (lock) lock.releaseLock();
   }
 }
 
@@ -287,7 +300,7 @@ function processar(req, ss, ctx) {
       // Gravar por cima de uma minuta que já existe é "alterar"; número novo é "criar".
       const alterada = existeNumero(abaM, num);
       exigir(quem, alterada ? 'minutas.editar' : 'minutas.criar');
-      const anterior = removerLinhas(abaM, num, true);
+      const anterior = alterada ? removerLinhas(abaM, num, true) : { qtd: 0, pdf: '' };
       removerLinhas(abaI, num, false);
 
       let linkPdf = anterior.pdf || '';
@@ -297,20 +310,13 @@ function processar(req, ss, ctx) {
       const pessoas = Array.from(new Set(itens.map(function (i) { return i.pessoa; }).filter(String))).join(', ');
       const numeroTexto = String(m.numero);
 
-      const linhaM = abaM.getLastRow() + 1;
-      abaM.getRange(linhaM, 1, 1, CAB_MINUTAS.length).setValues([[
+      gravarNoLugar(abaM, [[
         numeroTexto, m.data || '', m.volumes || '', m.embalagem || '', m.remetente || '', m.destinatario || '',
         itens.length, pessoas, linkPdf, agoraTexto(ss), m.origem || '', m.dados ? JSON.stringify(m.dados) : '', quem.nome || quem.usuario || ''
-      ]]);
-
-      if (itens.length) {
-        const linhaI = abaI.getLastRow() + 1;
-        abaI.getRange(linhaI, 1, itens.length, CAB_ITENS.length).setValues(itens.map(function (it, i) {
-          return [numeroTexto, m.data || '', i + 1, it.pessoa || '', it.ref || '', Number(it.qtd) || 1, it.conteudo || '', it.obs || ''];
-        }));
-      }
-      ordenar(abaM, CAB_MINUTAS.length);
-      ordenar(abaI, CAB_ITENS.length);
+      ]], num, CAB_MINUTAS.length);
+      gravarNoLugar(abaI, itens.map(function (it, i) {
+        return [numeroTexto, m.data || '', i + 1, it.pessoa || '', it.ref || '', Number(it.qtd) || 1, it.conteudo || '', it.obs || ''];
+      }), num, CAB_ITENS.length);
       const inc = marcarPedidosIncluidos(ss, itens, numeroTexto, quem);
       // E-mail geral "Malote despachado": só na primeira gravação da minuta (ou quando entram pedidos novos numa regravação).
       const desp = (!alterada || inc.novos.length) ? avisarDespacho(ss, m, itens, numeroTexto, quem, inc.novos, alterada) : { pendentes: [] };
@@ -362,8 +368,18 @@ function normalizarNumero(v) {
   return s ? String(parseInt(s, 10)) : '';
 }
 
+// 4.0: o cabeçalho e o formato de texto das colunas A:B eram conferidos e regravados em TODA
+// requisição (três abas por pedido). Agora isso é feito uma vez por versão do script (cache de 6 h).
+const _abasConferidas = {};
 function obterAba(ss, nome, cabecalho) {
   let aba = ss.getSheetByName(nome);
+  if (aba && _abasConferidas[nome]) return aba;
+  const chaveCache = 'aba:' + VERSAO_SCRIPT + ':' + nome + ':' + cabecalho.length;
+  if (aba) {
+    let jaConferida = false;
+    try { jaConferida = CacheService.getScriptCache().get(chaveCache) === '1'; } catch (e) {}
+    if (jaConferida) { _abasConferidas[nome] = true; return aba; }
+  }
   if (!aba) {
     aba = ss.insertSheet(nome);
     aba.getRange(1, 1, 1, cabecalho.length).setValues([cabecalho])
@@ -381,22 +397,56 @@ function obterAba(ss, nome, cabecalho) {
   // Número e data como texto: mantém zeros à esquerda (000123) e evita
   // conversão automática de datas.
   aba.getRange('A:B').setNumberFormat('@');
+  _abasConferidas[nome] = true;
+  try { CacheService.getScriptCache().put(chaveCache, '1', 21600); } catch (e) {}
   return aba;
 }
 
+// 4.0: lê só as colunas necessárias e apaga as linhas seguidas de uma vez (antes era uma por uma).
 function removerLinhas(aba, num, guardarPdf) {
   const ultima = aba.getLastRow();
   const res = { qtd: 0, pdf: '' };
   if (ultima < 2) return res;
-  const valores = aba.getRange(2, 1, ultima - 1, Math.max(9, aba.getLastColumn())).getValues();
-  for (let i = valores.length - 1; i >= 0; i--) {
-    if (normalizarNumero(valores[i][0]) === num) {
-      if (guardarPdf && valores[i][8] && !res.pdf) res.pdf = valores[i][8];
-      aba.deleteRow(i + 2);
-      res.qtd++;
-    }
+  const nums = aba.getRange(2, 1, ultima - 1, 1).getValues();
+  const achadas = [];
+  for (let i = 0; i < nums.length; i++) if (normalizarNumero(nums[i][0]) === num) achadas.push(i + 2);
+  if (!achadas.length) return res;
+  if (guardarPdf) {
+    const pdfs = aba.getRange(achadas[0], 9, achadas[achadas.length - 1] - achadas[0] + 1, 1).getValues();
+    for (let k = 0; k < achadas.length && !res.pdf; k++) { const v = pdfs[achadas[k] - achadas[0]][0]; if (v) res.pdf = v; }
   }
+  // Blocos de linhas seguidas, de baixo para cima (apagar não desloca o que ainda falta).
+  let fim = achadas.length - 1;
+  while (fim >= 0) {
+    let ini = fim;
+    while (ini > 0 && achadas[ini - 1] === achadas[ini] - 1) ini--;
+    aba.deleteRows(achadas[ini], fim - ini + 1);
+    fim = ini - 1;
+  }
+  res.qtd = achadas.length;
   return res;
+}
+
+// Grava linhas já em ordem decrescente: se o número é o maior, entram no topo (sem reordenar a aba
+// inteira, que é o passo mais lento conforme a planilha cresce); senão, no fim e a aba é ordenada.
+function gravarNoLugar(aba, linhas, numero, colunas) {
+  if (!linhas.length) return;
+  const ultima = aba.getLastRow();
+  let topo = ultima < 2;
+  if (!topo) {
+    const primeiro = Number(normalizarNumero(aba.getRange(2, 1).getValue())) || 0;
+    topo = Number(numero) >= primeiro;
+  }
+  if (topo) {
+    if (ultima >= 2) aba.insertRowsBefore(2, linhas.length);
+    const faixa = aba.getRange(2, 1, linhas.length, colunas);
+    faixa.setFontWeight('normal').setBackground(null).setFontColor(null);
+    aba.getRange(2, 1, linhas.length, 2).setNumberFormat('@');
+    faixa.setValues(linhas);
+  } else {
+    aba.getRange(ultima + 1, 1, linhas.length, colunas).setValues(linhas);
+    ordenar(aba, colunas);
+  }
 }
 
 function ordenar(aba, colunas) {
@@ -996,6 +1046,11 @@ function lerDataTexto(txt) {
   const t = String(txt || '').trim();
   if (!t) return null;
   try { return Utilities.parseDate(t, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss'); } catch (e) { return null; }
+}
+
+function lembreteVencido() {
+  try { return Date.now() - (Number(PropertiesService.getScriptProperties().getProperty('LEMBRETE_ULTIMA_VERIFICACAO')) || 0) >= 30 * 60 * 1000; }
+  catch (e) { return false; }
 }
 
 function verificarPedidosParadosSePreciso(ss) {

@@ -13,6 +13,17 @@ O mesmo código roda de dois jeitos:
 | PDF | Imprimir › **Salvar como PDF** | Gerado e aberto automaticamente, com cópia no Drive |
 | Cópia no `registro_itens.csv` | — | Sim, quando a pasta estiver acessível |
 
+## Novidades da v4.0
+
+- **Mais rápido para abrir**: com sessão guardada o app abre na hora e o Google confere o login em segundo plano; número, histórico e pedidos são buscados ao mesmo tempo (antes era um depois do outro). A tela de login aparece sem esperar o Google.
+- **Mais rápido para salvar**: a gravação não consulta mais o número antes (a própria gravação confere a sequência) e o aviso de "salvo" não espera recarregar o histórico.
+- **Script do Google 4.0**: consultas não esperam mais na fila do bloqueio (só o que grava espera), a conferência do cabeçalho/formato das abas é feita uma vez por versão em vez de em toda requisição, e a minuta nova entra no topo da aba sem reordenar a planilha inteira.
+- **Consultas repetidas**: pedidos iguais feitos ao mesmo tempo viram uma ida só ao Google, e a busca do Histórico filtra o que já está carregado (antes cada letra baixava o histórico inteiro).
+- **Usuários dentro de Configurações**: abas *Configurações | Usuários*, abertas pela engrenagem (o selo de cadastros aguardando aprovação aparece na engrenagem e na aba).
+- **Login/cadastro compacto**: campos lado a lado no cadastro e o card nunca passa da altura da janela.
+- **Correções**: aviso "Salvando…" que ficava preso; status da planilha marcado como inacessível antes do login; engrenagem sumia para quem só gerencia usuários.
+- **Precisa do `GoogleSheets_Script.gs` 4.0 publicado** (o app continua funcionando com o 3.9, só sem os ganhos do script).
+
 ## Novidades da v3.9
 
 - **E-mails saem de `amostra@quatrok.com.br`**: todos os avisos (malote despachado, pedidos incluídos/recusados/reabertos, comentários, lembretes e testes) usam a conta definida em `EMAIL_CONTA_ENVIO` no `GoogleSheets_Script.gs`. O ideal é publicar o script com essa conta. Se o script for publicado por outra conta, `amostra@quatrok.com.br` precisa estar em *Gmail › Configurações › Contas › Enviar e-mail como* dessa conta (o Google pede para autorizar o Gmail de novo: rode `testarEmail` no editor). Sem isso, o envio é recusado com uma mensagem explicando o que fazer.

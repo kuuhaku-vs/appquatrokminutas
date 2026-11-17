@@ -8,7 +8,9 @@
 .np-tela-nova [data-go="nova"],
 .np-tela-frete [data-go="frete"],
 .np-tela-historico [data-go="historico"],
-.np-tela-config [data-go="config"],
+.np-tela-config [data-go="config"]:not(.sb-gear):not(.m-gear),
+.np-tela-config.np-tela-usuarios :is(.sb-gear, .m-gear),
+.np-tela-config .cfg-abas, .np-tela-usuarios .cfg-abas,
 .np-tela-usuarios [data-go="usuarios"],
 .np-tela-pedidos [data-go="pedidos"],
 .np-tela-destinatarios [data-go="destinatarios"],
@@ -518,8 +520,9 @@
 .sb-gear:hover { background: rgba(255, 255, 255, .08); color: #fff; }
 .sb-gear .ico { width: 18px; height: 18px; transition: transform .3s; }
 .sb-gear:hover .ico { transform: rotate(45deg); }
-body[data-screen="config"] .sb-gear, body[data-screen="config"] .m-gear { background: rgba(59, 130, 246, .22); border-color: rgba(96, 165, 250, .45); color: #fff; }
-.np-tela-usuarios #sbLabelSistema { display: none; }
+body[data-screen="config"] .sb-gear, body[data-screen="config"] .m-gear, body[data-screen="usuarios"] .sb-gear, body[data-screen="usuarios"] .m-gear { background: rgba(59, 130, 246, .22); border-color: rgba(96, 165, 250, .45); color: #fff; }
+/* 4.0: Usuários foi para dentro de Configurações (engrenagem); o título "Sistema" do menu ficou vazio. */
+#sbLabelSistema { display: none; }
 @media (max-width: 1100px) { .sb-conta { flex-direction: column; } .sb-gear { flex-basis: 36px; } }
 
 /* Barra inferior do celular: nomes não estouram quando há muitas telas */
@@ -655,3 +658,56 @@ html:not(.tem-login) .aviso-despacho { display: none !important; }
 #pedDe.ped-de-fixo[readonly] { color: var(--text); font-weight: 600; cursor: not-allowed; padding-right: 32px; box-shadow: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237d8db0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='11' width='14' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 0 1 8 0v4'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 10px center; background-size: 15px; }
+
+
+/* =========================================================
+   v4.0 · LOGIN/CADASTRO COMPACTO
+   O card nunca passa da altura da janela: menos espaço entre os campos,
+   campos lado a lado no cadastro (nome | e-mail, senha | repita) e, se a
+   janela for baixa mesmo assim, só o formulário rola dentro do card.
+========================================================= */
+.lgn { display: flex; padding: 16px; }
+.lg-card { margin: auto; max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); width: min(860px, 100%); }
+.lg-stage { min-height: 0; }
+.lg-form { gap: 11px; padding: 30px 34px 22px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  display: grid; grid-template-columns: 1fr 1fr; column-gap: 12px; align-content: center; }
+.lg-form > * { grid-column: 1 / -1; }
+.lg-form .field { gap: 5px; }
+.lg-form .field input { height: 40px; }
+.lg-logo { width: 112px; margin-bottom: 0; }
+.lg-form h1 { font-size: 24px; }
+.lg-sub { margin: -6px 0 2px; font-size: 12.5px; line-height: 1.45; }
+.lg-go { height: 44px; }
+.lg-msg { min-height: 0; }
+.lg-msg:empty { display: none; }
+/* Cadastro / primeiro acesso: pares lado a lado. */
+.lgn[data-modo="cadastro"] .lg-meia, .lgn[data-modo="primeiro"] .lg-meia { grid-column: auto; }
+.lgn[data-modo="cadastro"] .lg-senha, .lgn[data-modo="primeiro"] .lg-senha { grid-column: 1; }
+.lgn[data-modo="cadastro"] .lg-meia:has(#lgSenha2), .lgn[data-modo="primeiro"] .lg-meia:has(#lgSenha2) { grid-column: 2; }
+.lgn[data-modo="cadastro"] .lg-logo, .lgn[data-modo="primeiro"] .lg-logo { display: none; }
+.lgn[data-modo="cadastro"] .lg-sub, .lgn[data-modo="primeiro"] .lg-sub { max-width: none; }
+/* Janela baixa (notebook, programa do Windows sem maximizar). */
+@media (max-height: 720px) and (min-width: 761px) {
+  .lg-form { gap: 9px; padding: 22px 30px 18px; }
+  .lg-logo { display: none; }
+  .lg-form h1 { font-size: 22px; }
+  .lg-form .field input { height: 38px; }
+  .lg-go { height: 42px; }
+  .lg-scene { max-width: 300px; }
+}
+@media (max-width: 760px) {
+  .lgn { padding: 0; }
+  .lg-card { margin: 0; max-height: none; min-height: 100%; }
+  .lg-form { overflow: visible; padding: 20px 20px calc(24px + env(safe-area-inset-bottom)); }
+  .lg-form .field input { height: 46px; }
+}
+@media (max-width: 420px) {
+  .lgn[data-modo] .lg-form > * { grid-column: 1 / -1 !important; }
+}
+
+/* =========================================================
+   v4.0 · ABAS "Configurações | Usuários" E AVISO NA ENGRENAGEM
+========================================================= */
+.cfg-abas .nova-aba .nav-badge { margin-left: 2px; }
+.sb-gear, .m-gear { position: relative; }
+.sb-gear .us-badge, .m-gear .us-badge { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; font-size: 9.5px; padding: 0 4px; box-shadow: 0 0 0 2px var(--sidebar, #0b1224); }

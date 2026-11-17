@@ -132,15 +132,15 @@
       <h1 id="lgTitulo">Entrar</h1>
       <p class="lg-sub" id="lgSub"></p>
       <label class="field" data-only="primeiro"><span>Código de acesso (o do script do Google)</span><input id="lgCodigo" type="password" autocomplete="off" /></label>
-      <label class="field" data-only="novo"><span>Seu nome</span><input id="lgNome" autocomplete="name" maxlength="60" placeholder="Como aparece nas minutas" /></label>
-      <label class="field" data-only="novo"><span>E-mail</span><input id="lgEmail" type="email" autocomplete="email" maxlength="120" required title="Obrigatório. E-mail onde você recebe os avisos dos seus pedidos de envio (incluído na minuta, recusado, comentado...)." /></label>
+      <label class="field lg-meia" data-only="novo"><span>Seu nome</span><input id="lgNome" autocomplete="name" maxlength="60" placeholder="Nome e sobrenome" /></label>
+      <label class="field lg-meia" data-only="novo"><span>E-mail</span><input id="lgEmail" type="email" autocomplete="email" maxlength="120" required title="Obrigatório. E-mail onde você recebe os avisos dos seus pedidos de envio (incluído na minuta, recusado, comentado...)." /></label>
       <label class="field"><span>Usuário</span><input id="lgUsuario" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" /></label>
-      <div class="field"><span>Senha</span>
+      <div class="field lg-senha"><span>Senha</span>
         <div class="lg-pass"><input id="lgSenha" type="password" autocomplete="current-password" maxlength="100" aria-label="Senha" />
           <button class="lg-eye" id="lgOlho" type="button" aria-pressed="false" title="Mostrar a senha">${ico('eye')}</button></div>
         <span class="lg-caps" id="lgCaps" hidden>Caps Lock está ligado</span>
       </div>
-      <label class="field" data-only="novo"><span>Repita a senha</span><input id="lgSenha2" type="password" autocomplete="new-password" maxlength="100" /></label>
+      <label class="field lg-meia" data-only="novo"><span>Repita a senha</span><input id="lgSenha2" type="password" autocomplete="new-password" maxlength="100" /></label>
       <label class="lg-keep"><input type="checkbox" id="lgLembrar" /> Manter conectado neste aparelho</label>
       <button class="primary lg-go" id="lgEntrar" type="submit">Entrar</button>
       <p class="lg-msg" id="lgMsg" role="alert"></p>
@@ -179,7 +179,7 @@
   <div class="m-body">
     <div class="fgrid">
       <label class="field"><span>Usuário (para entrar)</span><input id="usUsuario" autocapitalize="none" spellcheck="false" maxlength="30" title="Nome usado para entrar no app: sem espaços nem acentos (ex.: maria.silva)" /></label>
-      <label class="field"><span>Nome</span><input id="usNome" maxlength="60" placeholder="Como aparece nas minutas" /></label>
+      <label class="field"><span>Nome</span><input id="usNome" maxlength="60" placeholder="Nome e sobrenome" /></label>
       <label class="field span2"><span>E-mail <i>(obrigatório, para os avisos de pedidos de envio)</i></span><input id="usEmail" type="email" autocomplete="off" maxlength="120" required title="E-mail da pessoa. Ela recebe um aviso quando um pedido de envio dela for incluído na minuta ou recusado." /></label>
       <label class="field"><span id="usSenhaRotulo">Senha</span><input id="usSenha" type="password" autocomplete="new-password" maxlength="100" /></label>
       <div class="field"><span>Situação</span><div class="chips-check"><label><input type="checkbox" id="usAtivo" checked /><span>Usuário ativo (pode entrar)</span></label></div></div>
@@ -213,9 +213,15 @@
       <section class="card"><div class="us-empty"><p><b>Seu usuário ainda não tem nenhuma tela liberada.</b></p><p>Peça ao administrador para definir suas permissões.</p></div></section>
     </section>`);
   // Configurações saiu do menu: fica na engrenagem ao lado do usuário (barra lateral e topo do celular).
-  document.querySelector('#sbLabelSistema')?.insertAdjacentHTML('afterend', '<button class="nav" data-go="usuarios" data-ico="users"><span>Usuários</span><b class="nav-badge" id="usBadge" hidden></b></button>');
-  document.querySelector('.sb-foot')?.insertAdjacentHTML('afterbegin', '<div class="sb-conta"><button class="sb-user" id="sbUser" type="button" title="Minha conta" hidden></button><button class="sb-gear" data-go="config" type="button" title="Configurações (Alt+3)" aria-label="Configurações" data-ico="settings"></button></div>');
-  document.querySelector('.m-top')?.insertAdjacentHTML('beforeend', '<button class="m-top-btn m-gear" data-go="config" type="button" title="Configurações" aria-label="Configurações" data-ico="settings"></button><button class="m-top-btn m-user" id="mTopUser" type="button" title="Minha conta" hidden></button>');
+  // 4.0: "Usuários" é uma aba dentro de Configurações (como Minuta de despacho | Frete cortesia).
+  const abasSistema = (ativa) => `<nav class="nova-abas cfg-abas" aria-label="Configurações do sistema">
+      <button type="button" class="nova-aba${ativa === 'config' ? ' active' : ''}" data-go="config" data-ico="settings"${ativa === 'config' ? ' aria-current="page"' : ''}><span>Configurações</span></button>
+      <button type="button" class="nova-aba${ativa === 'usuarios' ? ' active' : ''}" data-go="usuarios" data-ico="users"${ativa === 'usuarios' ? ' aria-current="page"' : ''}><span>Usuários</span><b class="nav-badge us-badge" hidden></b></button>
+    </nav>`;
+  $('v-config')?.insertAdjacentHTML('afterbegin', abasSistema('config'));
+  $('v-usuarios')?.insertAdjacentHTML('afterbegin', abasSistema('usuarios'));
+  document.querySelector('.sb-foot')?.insertAdjacentHTML('afterbegin', '<div class="sb-conta"><button class="sb-user" id="sbUser" type="button" title="Minha conta" hidden></button><button class="sb-gear" data-go="config" type="button" title="Configurações e usuários (Alt+3)" aria-label="Configurações e usuários" data-ico="settings"><b class="nav-badge us-badge" hidden></b></button></div>');
+  document.querySelector('.m-top')?.insertAdjacentHTML('beforeend', '<button class="m-top-btn m-gear" data-go="config" type="button" title="Configurações e usuários" aria-label="Configurações e usuários" data-ico="settings"><b class="nav-badge us-badge" hidden></b></button><button class="m-top-btn m-user" id="mTopUser" type="button" title="Minha conta" hidden></button>');
   window.hidratarIcones?.();
   document.querySelector('#cfgSheetsToken')?.closest('label')?.classList.add('campo-codigo');
   // O vínculo com o script do Google fica na tela de Usuários (só o administrador mexe).
@@ -499,7 +505,7 @@
       </div>`;
     }).join('') || '<div class="us-empty">Nenhum usuário.</div>';
   }
-  function marcarPendentes(n) { const b = $('usBadge'); if (b) { b.hidden = !n; b.textContent = n ? String(n) : ''; } }
+  function marcarPendentes(n) { document.querySelectorAll('.us-badge').forEach((b) => { b.hidden = !n; b.textContent = n ? String(n) : ''; b.title = n ? n + ' cadastro(s) aguardando aprovação' : ''; }); }
   async function avisarPendentes() {
     if (S.legado || !pode('usuarios.gerenciar')) return;
     const r = await api.auth('usuarios.listar'); if (!r?.ok) return;
@@ -586,6 +592,28 @@
   (async function iniciar() {
     if (!api || !api.auth) return entrarSemLogin('');
     const g = lerGuardado();
+    if (g && g.expira > Date.now() && g.usuario) {
+      // 4.0: com sessão guardada, o app abre na hora com o usuário que estava salvo e o Google confere
+      // em segundo plano (antes a tela esperava essa ida e volta, que no Apps Script leva segundos).
+      S.usuario = g.usuario; S.lembrar = !!g.lembrar;
+      await definirSessao({ token: g.token, expira: g.expira });
+      S.logado = true; ultimaConferencia = Date.now();
+      const pEu = api.auth('auth.eu'); // já pergunta ao Google enquanto a página termina de montar
+      // Os outros módulos (painel, pedidos, destinatários...) precisam estar carregados para ouvir o "entrou".
+      if (document.readyState === 'loading') await new Promise((ok) => document.addEventListener('DOMContentLoaded', ok, { once: true }));
+      entrar();
+      const r = await pEu;
+      if (r?.ok && r.usuario) {
+        const antes = JSON.stringify(S.usuario);
+        await definirSessao(r.sessao || null, r.usuario);
+        if (antes !== JSON.stringify(S.usuario)) {
+          aplicarPermissoes(); window.dispatchEvent(new CustomEvent('gm-usuario-atualizado'));
+          const tela = document.body.dataset.screen; if (tela && !podeTela(tela)) window.go?.(primeiraTela());
+        }
+      } else if (r?.codigo === 'login') sessaoEncerrada('Sua sessão terminou. Entre de novo para continuar.');
+      else if (antigo(r) && r.codigo !== 'semurl') location.reload();
+      return;
+    }
     if (g && g.expira > Date.now()) {
       S.usuario = g.usuario || null; S.lembrar = !!g.lembrar;
       await definirSessao({ token: g.token, expira: g.expira });
@@ -598,10 +626,16 @@
       campoUsuario.value = g.usuario?.usuario || ''; escreverAC();
       return mostrarLogin('login', 'Sua sessão terminou. Entre de novo para continuar.');
     }
-    const r = await api.auth('auth.estado');
+    // 4.0: a tela de login aparece na hora; o estado do Google (primeiro acesso, cadastro aberto) chega depois.
+    const pEstado = api.auth('auth.estado');
+    if (api.web) { if (document.readyState === 'loading') await new Promise((ok) => document.addEventListener('DOMContentLoaded', ok, { once: true })); mostrarLogin('login'); }
+    const r = await pEstado;
     if (antigo(r)) return entrarSemLogin(r.codigo === 'semurl' ? '' : 'antigo');
     if (r?.ok && r.cadastro === false) S.cadastroAberto = false;
+    if (lg.classList.contains('is-busy') || S.logado) return; // a pessoa já está entrando
     if (r?.ok && !r.temUsuarios) return mostrarLogin('primeiro');
+    if (api.web && lg.dataset.modo === 'cadastro') { if (!S.cadastroAberto) mostrarLogin('login', r.error || ''); return; }
+    if (api.web) { $('lgTrocar').hidden = !S.cadastroAberto; if (semRede(r)) mensagem('Sem conexão com o Google no momento. Confira a internet.', true); return; }
     mostrarLogin('login', semRede(r) ? 'Sem conexão com o Google no momento. Confira a internet.' : '');
   })();
 })();

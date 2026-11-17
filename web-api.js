@@ -35,7 +35,33 @@
   }
   const avisar = () => ouvintes.forEach((cb) => { try { cb(status()); } catch {} });
 
-  async function remoto(payload, { timeout = 45000, override = null } = {}) {
+  // 4.0: consultas iguais feitas ao mesmo tempo (painel, histórico, sino...) viram uma ida só ao Google.
+  const LEITURAS = new Set(['listar', 'proximo', 'teste', 'auth.eu', 'auth.estado', 'pedidos.listar', 'destinatarios.listar', 'emails.listar', 'usuarios.listar', 'usuarios.emailmodelo']);
+  const emAndamento = new Map();
+  // Listas que vários módulos pedem logo ao abrir: a resposta vale alguns segundos. Qualquer gravação limpa tudo.
+  const VALIDADE = { 'pedidos.listar': 8000, 'destinatarios.listar': 8000, 'emails.listar': 8000, 'usuarios.listar': 8000 };
+  const respostas = new Map();
+  function remoto(payload, opcoes = {}) {
+    const acao = payload && payload.acao;
+    if (opcoes.override || !LEITURAS.has(acao)) {
+      respostas.clear();
+      return remotoDireto(payload, opcoes);
+    }
+    const chave = JSON.stringify(payload) + '|' + sessao;
+    const guardada = respostas.get(chave);
+    if (guardada && Date.now() - guardada.em < (VALIDADE[acao] || 0)) return guardada.p;
+    if (emAndamento.has(chave)) return emAndamento.get(chave);
+    const p = remotoDireto(payload, opcoes).finally(() => emAndamento.delete(chave));
+    emAndamento.set(chave, p);
+    if (VALIDADE[acao]) { respostas.set(chave, { em: Date.now(), p }); p.catch(() => respostas.delete(chave)); }
+    return p;
+  }
+  // Histórico: reaproveita a resposta por alguns segundos; gravar ou excluir minuta limpa na hora.
+  let histMemoria = null;
+  const HIST_VALIDADE = 15000;
+  const esquecerHistorico = () => { histMemoria = null; };
+
+  async function remotoDireto(payload, { timeout = 45000, override = null } = {}) {
     const s = override ? { ...cfgSheets(), ...override } : cfgSheets();
     if (!s.url) { const e = new Error('Informe a URL do Google Sheets em Configurações.'); e.codigo = 'semurl'; throw e; }
     const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeout);
@@ -115,7 +141,9 @@
   }
 
   async function registrar(minuta) {
+    esquecerHistorico();
     await remoto({ acao: 'registrar', validarSequencia: true, revisao: !!minuta.revisao, digitos: digitos(), minuta: paraSheets(minuta) }, { timeout: 60000 });
+    esquecerHistorico();
     estado.ultimoOk = { numero: String(minuta.numero), acao: 'registrar', em: new Date().toISOString() }; estado.ultimoErro = null; avisar();
   }
   const erroTxt = (e) => String(e?.message || e);
@@ -133,11 +161,17 @@
       try { const r = await remoto({ acao: 'proximo', digitos: digitos() }, { timeout: 25000 }); return { ok: true, exists: true, max: r.max, used: [], duplicates: [] }; }
       catch (e) { return { ok: false, error: erroTxt(e) }; }
     },
-    getHistorico: async () => {
-      try { const r = await remoto({ acao: 'listar' }, { timeout: 60000 }); const h = historicoDe(r.minutas); lsSet('gm_web_hist_cache', h); return h; }
-      catch { return lsGet('gm_web_hist_cache', []); }
+    getHistorico: () => {
+      if (histMemoria && Date.now() - histMemoria.em < HIST_VALIDADE) return histMemoria.p;
+      const p = (async () => {
+        try { const r = await remoto({ acao: 'listar' }, { timeout: 60000 }); const h = historicoDe(r.minutas); lsSet('gm_web_hist_cache', h); return h; }
+        catch { if (histMemoria && histMemoria.p === p) histMemoria = null; return lsGet('gm_web_hist_cache', []); }
+      })();
+      histMemoria = { em: Date.now(), p };
+      return p;
     },
     excluirMinuta: async (numero) => {
+      esquecerHistorico();
       try {
         const r = await remoto({ acao: 'excluir', minuta: { numero: String(numero) } });
         if (!r.removidas) return { ok: false, error: `A minuta nº ${numero} não foi encontrada no Google Sheets.` };

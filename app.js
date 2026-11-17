@@ -185,11 +185,14 @@ const pad = (n) => String(n).padStart(cfg.digitos || 6, '0');
 let telaAtual = 'nova';
 function go(v) {
   let destino = document.getElementById('v-' + v) ? v : 'nova';
+  // A engrenagem abre Configurações; quem só gerencia usuários cai direto na aba Usuários.
+  if (destino === 'config' && window.AUTH && !window.AUTH.podeTela('config') && window.AUTH.podeTela('usuarios')) destino = 'usuarios';
   // Controle de acesso: tela não liberada para o usuário vira a primeira tela que ele pode abrir.
   if (window.AUTH && !window.AUTH.podeTela(destino)) destino = window.AUTH.primeiraTela();
   telaAtual = destino;
   document.querySelectorAll('.view').forEach((e) => e.classList.toggle('active', e.id === 'v-' + destino));
   document.querySelectorAll('.nav').forEach((e) => e.classList.toggle('active', e.dataset.go === destino));
+  document.querySelectorAll('.cfg-abas .nova-aba').forEach((e) => { const on = e.dataset.go === destino; e.classList.toggle('active', on); if (on) e.setAttribute('aria-current', 'page'); else e.removeAttribute('aria-current'); });
   document.body.dataset.screen = destino;
   window.scrollTo({ top: 0, behavior: 'instant' });
   if (destino === 'historico') renderHist();
@@ -489,8 +492,9 @@ async function validar(m) {
   }
   return true;
 }
+// Depois de gravar, o histórico atualiza em segundo plano (não segura o aviso de "salvo").
 async function avancarNumero(m) {
-  hist = await store.getHist();
+  Promise.resolve(store.getHist()).then((h) => { hist = h || hist; if (telaAtual === 'historico') renderHist(); }).catch(() => {});
 }
 
 async function atualizarNumeroAntesDeSalvar() {
@@ -572,7 +576,7 @@ $('btnCSV').onclick = async () => {
   const r = await api.gerarCSV(m);
   if (!r.ok) {
     if (!modoRevisao && ((r.error || '').includes('já existe na planilha') || (r.error || '').includes('Próximo número disponível'))) {
-      if (!(await atualizarNumeroAntesDeSalvar())) return;
+      if (!(await atualizarNumeroAntesDeSalvar(true))) return;
       m = coletar();
       const retry = await api.gerarCSV(m);
       if (!retry.ok) return toast(retry.error, true);
@@ -590,7 +594,7 @@ $('btnPDF').onclick = async () => {
   try {
     let r = await api.gerarPDF(m, buildPrintHTML(m));
     if (!r.ok && !modoRevisao && ((r.error || '').includes('já existe na planilha') || (r.error || '').includes('Próximo número disponível'))) {
-      if (!(await atualizarNumeroAntesDeSalvar())) return;
+      if (!(await atualizarNumeroAntesDeSalvar(true))) return;
       m = coletar();
       r = await api.gerarPDF(m, buildPrintHTML(m));
     }
@@ -618,8 +622,18 @@ async function confirmarDuplicacaoMinuta(minuta) {
 }
 
 // ---------- Histórico ----------
+// 4.0: abrir o Histórico mostra na hora o que já está carregado e atualiza com a planilha em
+// segundo plano. Buscar e filtrar só redesenha (antes, cada letra digitada baixava tudo de novo).
+let histCarregando = null;
 async function renderHist() {
-  hist = await store.getHist();
+  desenharHist();
+  if (!histCarregando) {
+    histCarregando = Promise.resolve(store.getHist()).then((h) => { if (Array.isArray(h)) hist = h; }).catch(() => {}).finally(() => { histCarregando = null; });
+  }
+  await histCarregando;
+  if (telaAtual === 'historico') desenharHist();
+}
+function desenharHist() {
   const q = $('busca').value.toLowerCase().trim();
   const periodo = $('histPeriodo')?.value || 'all';
   const agora = new Date();
@@ -743,8 +757,8 @@ function dataISOHistoricoUI(v) {
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d,m,a]=s.split('/'); return `${a}-${m}-${d}`; }
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
 }
-$('busca').oninput = renderHist;
-$('histPeriodo')?.addEventListener('change', renderHist);
+$('busca').oninput = desenharHist;
+$('histPeriodo')?.addEventListener('change', desenharHist);
 $('btnPlanilha').onclick = () => hasApi && api.abrirCSV();
 $('btnPasta').onclick = $('btnPasta2').onclick = () => hasApi && api.abrirDados();
 
@@ -852,14 +866,13 @@ $('btnPreviewPrint').onclick = () => {
 };
 
 (async function init() {
+  // 4.0: a tela abre assim que a configuração local está pronta. Número oficial,
+  // histórico e conferências da planilha chegam em paralelo, em segundo plano.
   const splashStart = performance.now();
-  const MIN_SPLASH_MS = 1400;
+  const MIN_SPLASH_MS = 250; // só para a transição não piscar
   const splash = $('splashScreen');
   const status = $('splashStatus');
 
-  // A interface nunca deve depender da planilha para aparecer.
-  // Carregamos os padrões imediatamente e fazemos as consultas compartilhadas
-  // de forma tolerante a falhas.
   try {
     if (status) status.textContent = 'Carregando configurações';
     const salvo = await store.getConfig();
@@ -869,44 +882,30 @@ $('btnPreviewPrint').onclick = () => {
     cfg = mesclarConfig(DEFAULT_CFG, null);
   }
 
-  // Garante que a tela já tenha remetente/destinatário e um número local
-  // enquanto o restante é sincronizado.
-  try {
-    if (status) status.textContent = 'Preparando nova minuta';
-    await novaMinuta();
-  } catch (err) {
+  // Histórico guardado neste aparelho: dá o número provisório na hora (a planilha confirma depois).
+  if (hasApi && api.web) { try { const c = JSON.parse(localStorage.getItem('gm_web_hist_cache') || '[]'); if (Array.isArray(c)) hist = c; } catch {} }
+
+  const montarPadrao = (err) => {
     console.error('Falha ao montar nova minuta:', err);
     preencher({
-      numero: pad(cfg.proximo || 1),
-      dataISO: hoje(),
-      embalagens: [{ quantidade: 1, tipo: 'Malote' }],
-      remetente: cfg.remetente || DEFAULT_CFG.remetente,
-      destinatario: cfg.destinatario || DEFAULT_CFG.destinatario,
-      itens: []
+      numero: pad(cfg.proximo || 1), dataISO: hoje(), embalagens: [{ quantidade: 1, tipo: 'Malote' }],
+      remetente: cfg.remetente || DEFAULT_CFG.remetente, destinatario: cfg.destinatario || DEFAULT_CFG.destinatario, itens: []
     });
-  }
+  };
+  // novaMinuta() já preenche a tela com os padrões antes de perguntar o número à planilha.
+  let pNova;
+  try { pNova = Promise.resolve(novaMinuta()).catch(montarPadrao); } catch (err) { montarPadrao(err); pNova = Promise.resolve(); }
+  Promise.resolve(store.setConfig(cfg)).catch((err) => console.warn('Configuração não pôde ser persistida.', err));
+  const pHist = Promise.resolve(store.getHist()).then((h) => { hist = h || []; }).catch(() => { hist = hist || []; });
 
-  try {
-    await store.setConfig(cfg);
-  } catch (err) {
-    console.warn('Configuração não pôde ser persistida.', err);
-  }
-
-  try {
-    if (status) status.textContent = 'Preparando histórico';
-    hist = await store.getHist();
-  } catch (err) {
-    hist = [];
-  }
-
-  if (hasApi) {
-    try {
-      if (status) status.textContent = 'Verificando dados compartilhados';
-      const r = await api.verificarDuplicatas();
-      if (r?.ok && r.duplicates?.length) toast(`Atenção: ${r.duplicates.length} número(s) apresentam possíveis duplicidades na planilha.`, true);
-    } catch (err) {
-      console.warn('Verificação da planilha indisponível no momento.', err);
-    }
+  // Programa do Windows com planilha local: confere duplicidades (no navegador isso repetiria a consulta do número).
+  if (hasApi && !api.web) {
+    pHist.then(async () => {
+      try {
+        const r = await api.verificarDuplicatas();
+        if (r?.ok && r.duplicates?.length) toast(`Atenção: ${r.duplicates.length} número(s) apresentam possíveis duplicidades na planilha.`, true);
+      } catch (err) { console.warn('Verificação da planilha indisponível no momento.', err); }
+    });
   }
 
   if (status) status.textContent = 'Sistema pronto';
@@ -914,6 +913,7 @@ $('btnPreviewPrint').onclick = () => {
   const remaining = Math.max(0, MIN_SPLASH_MS - (performance.now() - splashStart));
   await new Promise((resolve) => setTimeout(resolve, remaining));
   if (splash) splash.classList.add('is-hidden');
+  await Promise.allSettled([pNova, pHist]);
 })();
 
 /* =========================================================
@@ -998,10 +998,13 @@ function podeMontarMinuta() {
   return !!(A.pode('minutas.criar') || A.pode('minutas.editar'));
 }
 async function salvarRascunho() {
-  if (restoringDraft || modoRevisao || !draftDirty || !podeMontarMinuta()) return;
+  // 4.0: quando não há o que salvar, o aviso volta ao normal (antes ficava "Salvando…" para sempre).
+  const semNada = () => setDraftStatus(modoRevisao ? '● Minuta registrada' : '● Rascunho salvo', 'saved');
+  if (restoringDraft) return;
+  if (modoRevisao || !draftDirty || !podeMontarMinuta()) return semNada();
   const snap = draftSnapshot();
   // Sem nenhum item no malote não há o que recuperar: apaga o rascunho antigo, se houver.
-  if (!snap.itens.length) { try { localStorage.removeItem(DRAFT_KEY); await localDB.del('drafts', 'current'); } catch {} return; }
+  if (!snap.itens.length) { try { localStorage.removeItem(DRAFT_KEY); await localDB.del('drafts', 'current'); } catch {} return semNada(); }
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(snap));
     await localDB.put('drafts', { key: 'current', ...snap });
@@ -1050,6 +1053,7 @@ async function recuperarRascunho() {
   }, false);
   restoringDraft = false;
   draftDirty = true;
+  try { rascunhoRecuperadoEm = Date.now(); } catch {}
   setDraftStatus('● Rascunho recuperado', 'recovered');
   toast('Rascunho recuperado. A numeração será validada novamente ao salvar.');
 }
@@ -1066,8 +1070,11 @@ function numeroCacheado() {
 
 /* Atualiza o número somente em segundo plano e salva cache */
 const atualizarNumeroOriginal = atualizarNumeroAntesDeSalvar;
-atualizarNumeroAntesDeSalvar = async function() {
+atualizarNumeroAntesDeSalvar = async function(depoisDeConflito) {
   if (!hasApi || modoRevisao) return true;
+  // 4.0: no navegador a gravação já confere a sequência dentro do bloqueio da planilha.
+  // Consultar o número antes era uma ida e volta a mais em todo salvamento; só consulta quando der conflito.
+  if (api.web && !depoisDeConflito) return true;
   const r = await api.proximoNumero(cfg.digitos || 6);
   if (!r?.ok || !r.numero) {
     toast(r?.error || 'Não foi possível consultar a próxima numeração na planilha compartilhada.', true);
@@ -1297,10 +1304,13 @@ $('btnCSV').onclick = async function(e) {
 
 /* Reforça cache do número após sincronização */
 const _novaMinutaOriginal = novaMinuta;
+let rascunhoRecuperadoEm = 0;
 novaMinuta = async function() {
+  const inicio = Date.now();
   await _novaMinutaOriginal();
   cacheNumero($('numero').value);
-  draftDirty = false;
+  // Se um rascunho foi recuperado enquanto o número era consultado, ele continua marcado como não salvo.
+  if (rascunhoRecuperadoEm < inicio) draftDirty = false;
 };
 
 /* recuperação após inicialização */
